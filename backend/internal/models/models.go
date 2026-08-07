@@ -77,9 +77,26 @@ func GenerateUUID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
+type TargetType string
+
+const (
+	TargetTypeRepo         TargetType = "REPO"
+	TargetTypeHost         TargetType = "HOST"
+	TargetTypeCloudAccount TargetType = "CLOUD_ACCOUNT"
+)
+
+type Target struct {
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	Type      TargetType `json:"type"`
+	Location  string     `json:"location"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
 // ScanSummary represents the metadata of a CBOM scan run
 type ScanSummary struct {
 	ID              string    `json:"id"`
+	TargetID        string    `json:"target_id"`
 	TargetDirectory string    `json:"target_directory"`
 	TotalFiles      int       `json:"total_files"`
 	ScannedFiles    int       `json:"scanned_files"`
@@ -127,19 +144,19 @@ type MigrationPlan struct {
 
 // CycloneDX 1.6 CBOM standard format export structures
 type CycloneDXCBOM struct {
-	BOMFormat    string               `json:"bomFormat"`
-	SpecVersion  string               `json:"specVersion"`
-	SerialNumber string               `json:"serialNumber"`
-	Version      int                  `json:"version"`
-	Metadata     CycloneDXMetadata    `json:"metadata"`
-	Components   []CycloneDXComponent `json:"components"`
-	Dependencies []CycloneDXDependency`json:"dependencies,omitempty"`
+	BOMFormat    string                 `json:"bomFormat"`
+	SpecVersion  string                 `json:"specVersion"`
+	SerialNumber string                 `json:"serialNumber"`
+	Version      int                    `json:"version"`
+	Metadata     CycloneDXMetadata      `json:"metadata"`
+	Components   []CycloneDXComponent   `json:"components"`
+	Dependencies []CycloneDXDependency `json:"dependencies"`
 }
 
 type CycloneDXMetadata struct {
-	Timestamp string             `json:"timestamp"`
-	Tools     []CycloneDXTool    `json:"tools"`
-	Component CycloneDXComponent `json:"component"`
+	Timestamp string               `json:"timestamp"`
+	Tools     []CycloneDXTool      `json:"tools"`
+	Component CycloneDXComponent   `json:"component"`
 }
 
 type CycloneDXTool struct {
@@ -153,6 +170,7 @@ type CycloneDXComponent struct {
 	Name             string                `json:"name"`
 	Version          string                `json:"version,omitempty"`
 	PURL             string                `json:"purl,omitempty"`
+	EvaluatedAt      string                `json:"evaluatedAt,omitempty"`
 	CryptoProperties *CycloneDXCryptoProps `json:"cryptoProperties,omitempty"`
 }
 

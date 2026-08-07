@@ -35,6 +35,8 @@ func main() {
 
 	// API Routing
 	mux.HandleFunc("/api/v1/health", cbomController.HandleHealth)
+	mux.HandleFunc("/api/v1/targets", cbomController.HandleTargets)
+	mux.HandleFunc("/api/v1/targets/", cbomController.HandleTargetDetail)
 	mux.HandleFunc("/api/v1/scans", cbomController.HandleScans)
 	mux.HandleFunc("/api/v1/scans/", cbomController.HandleScanDetail)
 

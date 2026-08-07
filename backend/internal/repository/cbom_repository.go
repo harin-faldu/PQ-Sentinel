@@ -11,15 +11,21 @@ import (
 )
 
 type CBOMRepository interface {
+	CreateTarget(t models.Target) error
+	ListTargets() ([]models.Target, error)
+	GetTarget(id string) (*models.Target, error)
+
 	SaveScan(summary models.ScanSummary, assets []models.CryptoAsset) error
 	GetScans() ([]models.ScanSummary, error)
 	GetScanByID(id string) (*models.ScanDetail, error)
+	GetScansByTarget(targetID string) ([]models.ScanSummary, error)
 	SaveMigrationPlan(plan models.MigrationPlan) error
 	GetMigrationPlanByScanID(scanID string) (*models.MigrationPlan, error)
 }
 
 type MemoryRepository struct {
 	mu             sync.RWMutex
+	targets        map[string]models.Target
 	scans          map[string]models.ScanSummary
 	assets         map[string][]models.CryptoAsset
 	migrationPlans map[string]models.MigrationPlan
@@ -27,12 +33,62 @@ type MemoryRepository struct {
 
 func NewMemoryRepository() *MemoryRepository {
 	repo := &MemoryRepository{
+		targets:        make(map[string]models.Target),
 		scans:          make(map[string]models.ScanSummary),
 		assets:         make(map[string][]models.CryptoAsset),
 		migrationPlans: make(map[string]models.MigrationPlan),
 	}
 	repo.seedInitialData()
 	return repo
+}
+
+func (r *MemoryRepository) CreateTarget(t models.Target) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if t.ID == "" {
+		t.ID = fmt.Sprintf("target-%s", models.GenerateUUID()[:8])
+	}
+	if t.CreatedAt.IsZero() {
+		t.CreatedAt = time.Now()
+	}
+	r.targets[t.ID] = t
+	return nil
+}
+
+func (r *MemoryRepository) ListTargets() ([]models.Target, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var list []models.Target
+	for _, t := range r.targets {
+		list = append(list, t)
+	}
+	return list, nil
+}
+
+func (r *MemoryRepository) GetTarget(id string) (*models.Target, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	t, exists := r.targets[id]
+	if !exists {
+		return nil, fmt.Errorf("target not found: %s", id)
+	}
+	return &t, nil
+}
+
+func (r *MemoryRepository) GetScansByTarget(targetID string) ([]models.ScanSummary, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var result []models.ScanSummary
+	for _, scan := range r.scans {
+		if scan.TargetID == targetID {
+			result = append(result, scan)
+		}
+	}
+	return result, nil
 }
 
 func (r *MemoryRepository) SaveScan(summary models.ScanSummary, assets []models.CryptoAsset) error {
@@ -95,9 +151,19 @@ func (r *MemoryRepository) seedInitialData() {
 	now := time.Now()
 	expiryCert := now.AddDate(1, 2, 0)
 
+	demoTargetID := "target-demo-001"
+	r.targets[demoTargetID] = models.Target{
+		ID:        demoTargetID,
+		Name:      "Payment Gateway Service",
+		Type:      models.TargetTypeRepo,
+		Location:  "PaymentGatewayService/v2",
+		CreatedAt: now.Add(-24 * time.Hour),
+	}
+
 	demoScanID := "scan-demo-001"
 	summary := models.ScanSummary{
 		ID:              demoScanID,
+		TargetID:        demoTargetID,
 		TargetDirectory: "PaymentGatewayService/v2",
 		TotalFiles:      142,
 		ScannedFiles:    142,
@@ -331,9 +397,19 @@ func NewMySQLRepository(dbSource string) (*MySQLRepository, error) {
 }
 
 func (r *MySQLRepository) createTables() error {
+	targetsTable := `
+	CREATE TABLE IF NOT EXISTS targets (
+		id VARCHAR(64) PRIMARY KEY,
+		name VARCHAR(255) NOT NULL,
+		type VARCHAR(32) NOT NULL,
+		location VARCHAR(500) NOT NULL,
+		created_at DATETIME NOT NULL
+	);`
+
 	scansTable := `
 	CREATE TABLE IF NOT EXISTS scans (
 		id VARCHAR(64) PRIMARY KEY,
+		target_id VARCHAR(64),
 		target_directory VARCHAR(255),
 		total_files INT,
 		scanned_files INT,
@@ -345,7 +421,8 @@ func (r *MySQLRepository) createTables() error {
 		pqc_score INT,
 		status VARCHAR(32),
 		duration_ms BIGINT,
-		created_at DATETIME
+		created_at DATETIME,
+		FOREIGN KEY (target_id) REFERENCES targets(id) ON DELETE SET NULL
 	);`
 
 	assetsTable := `
@@ -368,12 +445,77 @@ func (r *MySQLRepository) createTables() error {
 		FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
 	);`
 
+	_, err0 := r.db.Exec(targetsTable)
 	_, err1 := r.db.Exec(scansTable)
 	_, err2 := r.db.Exec(assetsTable)
+	if err0 != nil {
+		return err0
+	}
 	if err1 != nil {
 		return err1
 	}
 	return err2
+}
+
+func (r *MySQLRepository) CreateTarget(t models.Target) error {
+	if t.ID == "" {
+		t.ID = fmt.Sprintf("target-%s", models.GenerateUUID()[:8])
+	}
+	if t.CreatedAt.IsZero() {
+		t.CreatedAt = time.Now()
+	}
+	query := `INSERT INTO targets (id, name, type, location, created_at) VALUES (?, ?, ?, ?, ?)`
+	_, err := r.db.Exec(query, t.ID, t.Name, string(t.Type), t.Location, t.CreatedAt)
+	return err
+}
+
+func (r *MySQLRepository) ListTargets() ([]models.Target, error) {
+	rows, err := r.db.Query(`SELECT id, name, type, location, created_at FROM targets ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var targets []models.Target
+	for rows.Next() {
+		var t models.Target
+		var tType string
+		if err := rows.Scan(&t.ID, &t.Name, &tType, &t.Location, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		t.Type = models.TargetType(tType)
+		targets = append(targets, t)
+	}
+	return targets, nil
+}
+
+func (r *MySQLRepository) GetTarget(id string) (*models.Target, error) {
+	var t models.Target
+	var tType string
+	err := r.db.QueryRow(`SELECT id, name, type, location, created_at FROM targets WHERE id = ?`, id).Scan(&t.ID, &t.Name, &tType, &t.Location, &t.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	t.Type = models.TargetType(tType)
+	return &t, nil
+}
+
+func (r *MySQLRepository) GetScansByTarget(targetID string) ([]models.ScanSummary, error) {
+	rows, err := r.db.Query(`SELECT id, target_id, target_directory, total_files, scanned_files, total_assets, critical_count, high_count, medium_count, safe_count, pqc_score, status, duration_ms, created_at FROM scans WHERE target_id = ? ORDER BY created_at DESC`, targetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var scans []models.ScanSummary
+	for rows.Next() {
+		var s models.ScanSummary
+		if err := rows.Scan(&s.ID, &s.TargetID, &s.TargetDirectory, &s.TotalFiles, &s.ScannedFiles, &s.TotalAssets, &s.CriticalCount, &s.HighCount, &s.MediumCount, &s.SafeCount, &s.PQCScore, &s.Status, &s.DurationMs, &s.CreatedAt); err != nil {
+			return nil, err
+		}
+		scans = append(scans, s)
+	}
+	return scans, nil
 }
 
 func (r *MySQLRepository) SaveScan(summary models.ScanSummary, assets []models.CryptoAsset) error {
@@ -383,8 +525,8 @@ func (r *MySQLRepository) SaveScan(summary models.ScanSummary, assets []models.C
 	}
 	defer tx.Rollback()
 
-	queryScan := `INSERT INTO scans (id, target_directory, total_files, scanned_files, total_assets, critical_count, high_count, medium_count, safe_count, pqc_score, status, duration_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err = tx.Exec(queryScan, summary.ID, summary.TargetDirectory, summary.TotalFiles, summary.ScannedFiles, summary.TotalAssets, summary.CriticalCount, summary.HighCount, summary.MediumCount, summary.SafeCount, summary.PQCScore, summary.Status, summary.DurationMs, summary.CreatedAt)
+	queryScan := `INSERT INTO scans (id, target_id, target_directory, total_files, scanned_files, total_assets, critical_count, high_count, medium_count, safe_count, pqc_score, status, duration_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	_, err = tx.Exec(queryScan, summary.ID, summary.TargetID, summary.TargetDirectory, summary.TotalFiles, summary.ScannedFiles, summary.TotalAssets, summary.CriticalCount, summary.HighCount, summary.MediumCount, summary.SafeCount, summary.PQCScore, summary.Status, summary.DurationMs, summary.CreatedAt)
 	if err != nil {
 		return err
 	}
@@ -401,7 +543,7 @@ func (r *MySQLRepository) SaveScan(summary models.ScanSummary, assets []models.C
 }
 
 func (r *MySQLRepository) GetScans() ([]models.ScanSummary, error) {
-	rows, err := r.db.Query(`SELECT id, target_directory, total_files, scanned_files, total_assets, critical_count, high_count, medium_count, safe_count, pqc_score, status, duration_ms, created_at FROM scans ORDER BY created_at DESC`)
+	rows, err := r.db.Query(`SELECT id, target_id, target_directory, total_files, scanned_files, total_assets, critical_count, high_count, medium_count, safe_count, pqc_score, status, duration_ms, created_at FROM scans ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +552,7 @@ func (r *MySQLRepository) GetScans() ([]models.ScanSummary, error) {
 	var scans []models.ScanSummary
 	for rows.Next() {
 		var s models.ScanSummary
-		if err := rows.Scan(&s.ID, &s.TargetDirectory, &s.TotalFiles, &s.ScannedFiles, &s.TotalAssets, &s.CriticalCount, &s.HighCount, &s.MediumCount, &s.SafeCount, &s.PQCScore, &s.Status, &s.DurationMs, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.TargetID, &s.TargetDirectory, &s.TotalFiles, &s.ScannedFiles, &s.TotalAssets, &s.CriticalCount, &s.HighCount, &s.MediumCount, &s.SafeCount, &s.PQCScore, &s.Status, &s.DurationMs, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		scans = append(scans, s)
@@ -420,8 +562,8 @@ func (r *MySQLRepository) GetScans() ([]models.ScanSummary, error) {
 
 func (r *MySQLRepository) GetScanByID(id string) (*models.ScanDetail, error) {
 	var s models.ScanSummary
-	err := r.db.QueryRow(`SELECT id, target_directory, total_files, scanned_files, total_assets, critical_count, high_count, medium_count, safe_count, pqc_score, status, duration_ms, created_at FROM scans WHERE id = ?`, id).Scan(
-		&s.ID, &s.TargetDirectory, &s.TotalFiles, &s.ScannedFiles, &s.TotalAssets, &s.CriticalCount, &s.HighCount, &s.MediumCount, &s.SafeCount, &s.PQCScore, &s.Status, &s.DurationMs, &s.CreatedAt)
+	err := r.db.QueryRow(`SELECT id, target_id, target_directory, total_files, scanned_files, total_assets, critical_count, high_count, medium_count, safe_count, pqc_score, status, duration_ms, created_at FROM scans WHERE id = ?`, id).Scan(
+		&s.ID, &s.TargetID, &s.TargetDirectory, &s.TotalFiles, &s.ScannedFiles, &s.TotalAssets, &s.CriticalCount, &s.HighCount, &s.MediumCount, &s.SafeCount, &s.PQCScore, &s.Status, &s.DurationMs, &s.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

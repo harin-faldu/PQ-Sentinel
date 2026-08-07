@@ -18,6 +18,8 @@ type Scanner struct {
 	certParser       *CertParser
 	secretScanner    *SecretScanner
 	tlsScanner       *TLSScanner
+	kmsScanner       *AWSKMSScanner
+	containerScanner *ContainerScanner
 }
 
 func NewScanner() *Scanner {
@@ -39,7 +41,9 @@ func NewScanner() *Scanner {
 		configParser:     NewConfigParser(),
 		certParser:       NewCertParser(),
 		secretScanner:    NewSecretScanner(rulesCfg),
-		tlsScanner:       NewTLSScanner(5 * time.Second),
+		tlsScanner:       NewTLSScanner(10 * time.Second),
+		kmsScanner:       NewAWSKMSScanner("us-east-1"),
+		containerScanner: NewContainerScanner(),
 	}
 }
 
@@ -192,7 +196,31 @@ func (s *Scanner) ScanDirectory(targetDir string, scanID string) ([]models.Crypt
 		assets = append(assets, secretAssets[i])
 	}
 
+	// 3. Cloud KMS Key Discovery (IaC / Cloud Config Scanner)
+	kmsAssets, _ := s.kmsScanner.ScanKMSKeys(targetDir, scanID)
+	for i := range kmsAssets {
+		kmsAssets[i].BusinessScope, kmsAssets[i].ScopeWeight = classifyBusinessScope(kmsAssets[i].Location)
+		assets = append(assets, kmsAssets[i])
+	}
+
+	// 4. Container / Image Dockerfile & Syft Package Scanner
+	containerAssets, _ := s.containerScanner.ScanContainerImage(targetDir, scanID)
+	for i := range containerAssets {
+		containerAssets[i].BusinessScope, containerAssets[i].ScopeWeight = classifyBusinessScope(containerAssets[i].Location)
+		assets = append(assets, containerAssets[i])
+	}
+
 	return assets, totalFiles, scannedFiles, err
+}
+
+// ScanKMSKeys delegates Cloud KMS key discovery
+func (s *Scanner) ScanKMSKeys(targetDir string, scanID string) ([]models.CryptoAsset, error) {
+	return s.kmsScanner.ScanKMSKeys(targetDir, scanID)
+}
+
+// ScanContainerImage delegates container image scanning
+func (s *Scanner) ScanContainerImage(imageName string, scanID string) ([]models.CryptoAsset, error) {
+	return s.containerScanner.ScanContainerImage(imageName, scanID)
 }
 
 // AutoDiscoverTLSEndpoints delegates TLS port discovery to tlsScanner

@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/quantumpq/qv-cbom/internal/models"
@@ -27,6 +28,95 @@ func NewCBOMService(repo repository.CBOMRepository) *CBOMService {
 		scanner:    scanner.NewScanner(),
 		riskEngine: risk.NewRiskEngine(),
 	}
+}
+
+func (s *CBOMService) CreateTarget(target models.Target) (*models.Target, error) {
+	if target.ID == "" {
+		target.ID = fmt.Sprintf("target-%s", models.GenerateUUID()[:8])
+	}
+	if target.CreatedAt.IsZero() {
+		target.CreatedAt = time.Now()
+	}
+	if err := s.repo.CreateTarget(target); err != nil {
+		return nil, err
+	}
+	return s.repo.GetTarget(target.ID)
+}
+
+func (s *CBOMService) ListTargets() ([]models.Target, error) {
+	return s.repo.ListTargets()
+}
+
+func (s *CBOMService) GetTarget(id string) (*models.Target, error) {
+	return s.repo.GetTarget(id)
+}
+
+func (s *CBOMService) GetScansByTarget(targetID string) ([]models.ScanSummary, error) {
+	return s.repo.GetScansByTarget(targetID)
+}
+
+func (s *CBOMService) ExecuteScanByTarget(targetID string) (*models.ScanDetail, error) {
+	target, err := s.repo.GetTarget(targetID)
+	if err != nil {
+		return nil, fmt.Errorf("unknown target: %w", err)
+	}
+
+	scanID := fmt.Sprintf("scan-%d", time.Now().Unix())
+	startTime := time.Now()
+
+	var assets []models.CryptoAsset
+	var scannedFiles, totalFiles int
+
+	switch target.Type {
+	case models.TargetTypeRepo:
+		assets, totalFiles, scannedFiles, err = s.scanner.ScanDirectory(target.Location, scanID)
+		if err != nil {
+			return nil, fmt.Errorf("directory scan failed: %w", err)
+		}
+	case models.TargetTypeHost:
+		assets = s.scanner.ScanTLSEndpoints([]string{target.Location}, scanID)
+		totalFiles = 1
+		scannedFiles = 1
+	default:
+		// Fallback to directory scan
+		assets, totalFiles, scannedFiles, err = s.scanner.ScanDirectory(target.Location, scanID)
+		if err != nil {
+			return nil, fmt.Errorf("directory scan failed: %w", err)
+		}
+	}
+
+	pqcScore, critical, high, medium, safe := s.riskEngine.CalculatePQCScore(assets)
+
+	summary := models.ScanSummary{
+		ID:              scanID,
+		TargetID:        target.ID,
+		TargetDirectory: target.Location,
+		TotalFiles:      totalFiles,
+		ScannedFiles:    scannedFiles,
+		TotalAssets:     len(assets),
+		CriticalCount:   critical,
+		HighCount:       high,
+		MediumCount:     medium,
+		SafeCount:       safe,
+		PQCScore:        pqcScore,
+		Status:          "COMPLETED",
+		DurationMs:      time.Since(startTime).Milliseconds(),
+		CreatedAt:       time.Now(),
+	}
+
+	if err := s.repo.SaveScan(summary, assets); err != nil {
+		return nil, fmt.Errorf("failed to save scan to database: %w", err)
+	}
+
+	plan := s.riskEngine.GenerateMigrationPlan(scanID, assets)
+	_ = s.repo.SaveMigrationPlan(plan)
+
+	s.trackScoreHistory(summary)
+
+	return &models.ScanDetail{
+		Summary: summary,
+		Assets:  assets,
+	}, nil
 }
 
 func (s *CBOMService) ExecuteScan(targetDir string) (*models.ScanDetail, error) {
@@ -143,6 +233,22 @@ func (s *CBOMService) GetMigrationPlan(scanID string) (*models.MigrationPlan, er
 	return s.repo.GetMigrationPlanByScanID(scanID)
 }
 
+var nistLevelByAlgorithm = map[string]int{
+	"ML-KEM-768":  3,
+	"ML-KEM-1024": 5,
+	"ML-DSA-65":   3,
+	"ML-DSA-87":   5,
+	"SLH-DSA-128": 1,
+	"AES-256-GCM": 5,
+	"AES-128-GCM": 1,
+	"SHA-256":     0,
+	"SHA-384":     0,
+	"MD5":         0,
+	"SHA-1":       0,
+	"RSA":         0,
+	"ECDSA":       0,
+}
+
 func (s *CBOMService) GenerateCycloneDX(scanID string) (*models.CycloneDXCBOM, error) {
 	detail, err := s.repo.GetScanByID(scanID)
 	if err != nil {
@@ -152,21 +258,33 @@ func (s *CBOMService) GenerateCycloneDX(scanID string) (*models.CycloneDXCBOM, e
 	appRef := fmt.Sprintf("pkg:application/%s@1.0.0", detail.Summary.TargetDirectory)
 	var components []models.CycloneDXComponent
 	var cryptoRefs []string
+	nowISO := time.Now().Format(time.RFC3339)
 
 	for _, a := range detail.Assets {
-		purl := fmt.Sprintf("pkg:crypto/%s@%d", a.Algorithm, a.KeySize)
+		keySizeStr := fmt.Sprintf("%d", a.KeySize)
+		if a.KeySize == 0 {
+			keySizeStr = "unspecified"
+		}
+		// Valid generic PURL format per spec: pkg:generic/algo@keysize
+		purl := fmt.Sprintf("pkg:generic/%s@%s", strings.ToLower(a.Algorithm), keySizeStr)
 		cryptoRefs = append(cryptoRefs, purl)
 
+		nistLevel := 0
+		if level, ok := nistLevelByAlgorithm[a.Algorithm]; ok {
+			nistLevel = level
+		}
+
 		comp := models.CycloneDXComponent{
-			Type: "cryptographic-asset",
-			Name: a.Name,
-			PURL: purl,
+			Type:        "cryptographic-asset",
+			Name:        a.Name,
+			PURL:        purl,
+			EvaluatedAt: nowISO,
 			CryptoProperties: &models.CycloneDXCryptoProps{
 				AssetType: string(a.Type),
 				AlgorithmProperties: &models.CycloneDXAlgoProps{
 					Primitive:                a.Algorithm,
 					ParameterSetID:           fmt.Sprintf("%d-bit", a.KeySize),
-					NISTQuantumSecurityLevel: 1,
+					NISTQuantumSecurityLevel: nistLevel,
 				},
 			},
 		}
@@ -186,7 +304,7 @@ func (s *CBOMService) GenerateCycloneDX(scanID string) (*models.CycloneDXCBOM, e
 		SerialNumber: fmt.Sprintf("urn:uuid:qv-cbom-%s", scanID),
 		Version:      1,
 		Metadata: models.CycloneDXMetadata{
-			Timestamp: time.Now().Format(time.RFC3339),
+			Timestamp: nowISO,
 			Tools: []models.CycloneDXTool{
 				{Vendor: "QuantumVault", Name: "QV-CBOM Scanner", Version: "2.0.0"},
 			},

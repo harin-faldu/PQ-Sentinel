@@ -49,7 +49,7 @@ source_code_rules:
   # JavaScript / TypeScript (VULNERABLE / RISKY)
   - id: "JS-CRYPTO-01"
     name: "Legacy Hash Function (MD5)"
-    pattern: "crypto\\.createHash\\s*\\(\\s*['\"]md5['\"]\\)"
+    pattern: "(crypto\\.createHash|crypto\\[['\"]createHash['\"]\\]|require\\(['\"]crypto['\"]\\)\\.createHash)\\s*\\(\\s*['\"]md5['\"]"
     languages: ["javascript", "typescript"]
     algorithm: "MD5"
     key_size: 0
@@ -60,7 +60,7 @@ source_code_rules:
 
   - id: "JS-CRYPTO-02"
     name: "Legacy Hash Function (SHA1)"
-    pattern: "crypto\\.createHash\\s*\\(\\s*['\"]sha1['\"]\\)"
+    pattern: "(crypto\\.createHash|crypto\\[['\"]createHash['\"]\\]|require\\(['\"]crypto['\"]\\)\\.createHash)\\s*\\(\\s*['\"]sha1['\"]"
     languages: ["javascript", "typescript"]
     algorithm: "SHA-1"
     key_size: 0
@@ -71,7 +71,7 @@ source_code_rules:
 
   - id: "JS-CRYPTO-03"
     name: "RSA Key Generation (JS)"
-    pattern: "(generateKeyPair|createDiffieHellman)\\s*\\(\\s*['\"]rsa['\"]"
+    pattern: "(generateKeyPair(Sync)?|createDiffieHellman)\\s*\\(\\s*['\"]rsa['\"]"
     languages: ["javascript", "typescript"]
     algorithm: "RSA"
     key_size: 2048
@@ -124,6 +124,17 @@ source_code_rules:
     risk_rationale: "RSA key length under 2048 bits is factorable even by classical computers today."
     pqc_status: "VULNERABLE"
     pqc_replacement: "ML-KEM (Kyber-768 or Kyber-1024)"
+
+  - id: "JS-CRYPTO-08"
+    name: "WebCrypto SubtleCrypto Digest"
+    pattern: "subtle\\.digest\\s*\\(\\s*['\"]SHA-256['\"]"  
+    languages: ["javascript", "typescript"]
+    algorithm: "SHA-256"
+    key_size: 256
+    risk_level: "SAFE"
+    risk_rationale: "SHA-256 via WebCrypto SubtleCrypto API — quantum-safe hash."
+    pqc_status: "QUANTUM_SAFE"
+    pqc_replacement: "None Required (SHA-256 is PQC Safe)"
 
   # Python
   - id: "PY-CRYPTO-01"

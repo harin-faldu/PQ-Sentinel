@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/quantumpq/qv-cbom/internal/models"
 	"github.com/quantumpq/qv-cbom/internal/services"
 )
 
@@ -17,7 +18,71 @@ func NewCBOMController(service *services.CBOMService) *CBOMController {
 }
 
 type ScanRequest struct {
+	TargetID        string `json:"target_id"`
 	TargetDirectory string `json:"target_directory"`
+}
+
+// HandleTargets handles GET /api/v1/targets and POST /api/v1/targets
+func (c *CBOMController) HandleTargets(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	switch r.Method {
+	case http.MethodGet:
+		targets, err := c.service.ListTargets()
+		if err != nil {
+			http.Error(w, `{"error":"Failed to retrieve targets"}`, http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(targets)
+
+	case http.MethodPost:
+		var target models.Target
+		if err := json.NewDecoder(r.Body).Decode(&target); err != nil {
+			http.Error(w, `{"error":"Invalid request payload"}`, http.StatusBadRequest)
+			return
+		}
+		created, err := c.service.CreateTarget(target)
+		if err != nil {
+			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(created)
+
+	default:
+		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+	}
+}
+
+// HandleTargetDetail handles GET /api/v1/targets/{id} and /api/v1/targets/{id}/scans
+func (c *CBOMController) HandleTargetDetail(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/targets/")
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 || parts[0] == "" {
+		http.Error(w, `{"error":"Target ID required"}`, http.StatusBadRequest)
+		return
+	}
+
+	targetID := parts[0]
+
+	if len(parts) > 1 && parts[1] == "scans" {
+		scans, err := c.service.GetScansByTarget(targetID)
+		if err != nil {
+			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+			return
+		}
+		json.NewEncoder(w).Encode(scans)
+		return
+	}
+
+	target, err := c.service.GetTarget(targetID)
+	if err != nil {
+		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+		return
+	}
+	json.NewEncoder(w).Encode(target)
 }
 
 // HandleScans handles GET /api/v1/scans and POST /api/v1/scans
@@ -39,7 +104,15 @@ func (c *CBOMController) HandleScans(w http.ResponseWriter, r *http.Request) {
 			_ = json.NewDecoder(r.Body).Decode(&req)
 		}
 
-		detail, err := c.service.ExecuteScan(req.TargetDirectory)
+		var detail *models.ScanDetail
+		var err error
+
+		if req.TargetID != "" {
+			detail, err = c.service.ExecuteScanByTarget(req.TargetID)
+		} else {
+			detail, err = c.service.ExecuteScan(req.TargetDirectory)
+		}
+
 		if err != nil {
 			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 			return
@@ -103,6 +176,6 @@ func (c *CBOMController) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"status":  "healthy",
 		"service": "QuantumVault CBOM Engine",
-		"version": "1.0.0",
+		"version": "2.0.0",
 	})
 }

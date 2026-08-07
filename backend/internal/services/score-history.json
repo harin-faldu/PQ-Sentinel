@@ -1,0 +1,42 @@
+[
+  {
+    "scan_id": "scan-1786090995",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-07T13:53:15.7809408+05:30"
+  },
+  {
+    "scan_id": "scan-1786109843",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-07T19:07:23.3053887+05:30"
+  },
+  {
+    "scan_id": "scan-1786109912",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-07T19:08:32.7021277+05:30"
+  },
+  {
+    "scan_id": "scan-1786110363",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-07T19:16:03.9333897+05:30"
+  }
+]
