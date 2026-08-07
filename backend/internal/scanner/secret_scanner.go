@@ -1,0 +1,310 @@
+package scanner
+
+import (
+	"bufio"
+	"fmt"
+	"math"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/quantumpq/qv-cbom/internal/models"
+	"github.com/spf13/viper"
+	"github.com/zricethezav/gitleaks/v8/config"
+	"github.com/zricethezav/gitleaks/v8/detect"
+	"github.com/zricethezav/gitleaks/v8/sources"
+)
+
+type SecretScanner struct {
+	rules    *RulesConfig
+	detector *detect.Detector
+}
+
+func NewSecretScanner(rules *RulesConfig) *SecretScanner {
+	v := viper.New()
+	v.SetConfigType("toml")
+
+	var cfg config.Config
+	if err := v.ReadConfig(strings.NewReader(config.DefaultConfig)); err == nil {
+		var vc config.ViperConfig
+		if err := v.Unmarshal(&vc); err == nil {
+			if translated, err := vc.Translate(); err == nil {
+				cfg = translated
+			}
+		}
+	}
+
+	if cfg.Rules == nil {
+		cfg.Rules = make(map[string]config.Rule)
+	}
+
+	// Add custom secret rules from external rules.yaml into Gitleaks engine
+	if rules != nil {
+		for _, sr := range rules.SecretRules {
+			if sr.CompiledRegex != nil {
+				cfg.Rules[sr.ID] = config.Rule{
+					Description: sr.Name,
+					RuleID:      sr.ID,
+					Regex:       sr.CompiledRegex,
+				}
+			}
+		}
+	}
+
+	detector := detect.NewDetector(cfg)
+	return &SecretScanner{
+		rules:    rules,
+		detector: detector,
+	}
+}
+
+// RedactSecret masks sensitive characters in a secret match string for security
+func RedactSecret(secret string) string {
+	secret = strings.TrimSpace(secret)
+	if len(secret) <= 6 {
+		return "******"
+	}
+	prefixLen := 4
+	if len(secret) < 10 {
+		prefixLen = 2
+	}
+	return secret[:prefixLen] + strings.Repeat("*", len(secret)-prefixLen)
+}
+
+// ScanSecrets performs secret detection using embedded Gitleaks Go engine + Entropy Analysis + Git History Scanner
+func (ss *SecretScanner) ScanSecrets(targetDir string) ([]models.CryptoAsset, error) {
+	var assets []models.CryptoAsset
+
+	// 1. Scan Git Commit History (.git) if repository exists (with full patch diff -p)
+	gitDir := filepath.Join(targetDir, ".git")
+	if _, err := os.Stat(gitDir); err == nil && ss.detector != nil {
+		gitCmd, err := sources.NewGitLogCmd(targetDir, "--all -p")
+		if err != nil {
+			gitCmd, err = sources.NewGitLogCmd(targetDir, "--all")
+		}
+		if err == nil {
+			// Pass non-nil *detect.RemoteInfo to prevent nil-pointer dereference in Gitleaks createScmLink
+			remoteInfo := &detect.RemoteInfo{}
+			findings, err := ss.detector.DetectGit(gitCmd, remoteInfo)
+			if err == nil {
+				for _, finding := range findings {
+					redactedMatch := RedactSecret(finding.Match)
+					locationInfo := finding.File
+					if finding.Commit != "" {
+						commitHash := finding.Commit
+						if len(commitHash) >= 8 {
+							commitHash = commitHash[:8]
+						}
+						locationInfo = fmt.Sprintf("%s (Git Commit: %s)", finding.File, commitHash)
+					}
+
+					assets = append(assets, models.CryptoAsset{
+						ID:             models.GenerateUUID(),
+						Name:           "Git History Secret: " + finding.Description,
+						Type:           models.AssetKeyMaterial,
+						AssetType:      models.AssetKeyMaterial,
+						Algorithm:      finding.RuleID,
+						KeySize:        len(finding.Secret) * 8,
+						Location:       locationInfo,
+						LineNumber:     finding.StartLine,
+						ContextSnippet: "Historical Commit Secret: " + redactedMatch,
+						RiskLevel:      models.RiskCritical,
+						PQCStatus:      models.StatusVulnerable,
+						PQCReplacement: "Rotate Secret & Purge Git Commit History (git filter-repo / BFG)",
+						RiskRationale:  "Exposed secret found in historical Git commit log. Still vulnerable even if deleted from latest code!",
+						DiscoveredAt:   time.Now(),
+					})
+				}
+			}
+		}
+	}
+
+	// 2. Scan Filesystem & Dotenv (.env, .env.local, .env.production)
+	err := filepathWalk(targetDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+
+		// Ignore virtualenvs, pycache, node_modules, build output
+		if strings.Contains(path, "node_modules") || strings.Contains(path, "vendor") ||
+			strings.Contains(path, "dist") || strings.Contains(path, "__pycache__") ||
+			strings.Contains(path, ".venv") || strings.Contains(path, "venv") ||
+			strings.Contains(path, ".pytest_cache") {
+			return nil
+		}
+
+		relPath, _ := filepath.Rel(targetDir, path)
+		baseName := strings.ToLower(info.Name())
+		ext := strings.ToLower(filepath.Ext(path))
+
+		// Check .env files explicitly
+		isDotEnv := strings.HasPrefix(baseName, ".env")
+
+		// 1. Check dangerous file extensions (.pem, .key, .jks, .pfx, .p12)
+		if ext == ".pem" || ext == ".key" || ext == ".jks" || ext == ".pfx" || ext == ".p12" {
+			assets = append(assets, models.CryptoAsset{
+				ID:             models.GenerateUUID(),
+				Name:           "Key File: " + filepath.Base(path),
+				Type:           models.AssetKeyMaterial,
+				AssetType:      models.AssetKeyMaterial,
+				Algorithm:      strings.ToUpper(strings.TrimPrefix(ext, ".")),
+				KeySize:        int(info.Size() * 8),
+				Location:       relPath,
+				LineNumber:     1,
+				ContextSnippet: "Unencrypted key material stored on filesystem: " + info.Name(),
+				RiskLevel:      models.RiskCritical,
+				PQCStatus:      models.StatusVulnerable,
+				PQCReplacement: "Migrate to QuantumVault HSM / Key Vault",
+				RiskRationale:  "Raw key file committed to project directory.",
+				DiscoveredAt:   time.Now(),
+			})
+			return nil
+		}
+
+		if isBinaryExt(ext) && !isDotEnv {
+			return nil
+		}
+
+		// Read file content
+		contentBytes, err := os.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+
+		// 2. Embedded Gitleaks Scan on File Bytes (In-Memory with Secret Redaction)
+		if ss.detector != nil {
+			fragment := detect.Fragment{
+				FilePath: relPath,
+				Raw:      string(contentBytes),
+			}
+			for _, finding := range ss.detector.Detect(fragment) {
+				redactedMatch := RedactSecret(finding.Match)
+				assets = append(assets, models.CryptoAsset{
+					ID:             models.GenerateUUID(),
+					Name:           "Secret: " + finding.Description,
+					Type:           models.AssetKeyMaterial,
+					AssetType:      models.AssetKeyMaterial,
+					Algorithm:      finding.RuleID,
+					KeySize:        len(finding.Secret) * 8,
+					Location:       relPath,
+					LineNumber:     finding.StartLine,
+					ContextSnippet: "Redacted Match: " + redactedMatch,
+					RiskLevel:      models.RiskCritical,
+					PQCStatus:      models.StatusVulnerable,
+					PQCReplacement: "Rotate Secret & Store in QuantumVault KMS",
+					RiskRationale:  "Hardcoded credential exposed in source code / .env file (Gitleaks scan).",
+					DiscoveredAt:   time.Now(),
+				})
+			}
+		}
+
+		// 3. Custom YAML Secret Rules & Shannon Entropy Analysis line-by-line
+		file, err := os.Open(path)
+		if err != nil {
+			return nil
+		}
+		defer file.Close()
+
+		scanner := bufio.NewScanner(file)
+		lineNo := 0
+		for scanner.Scan() {
+			lineNo++
+			line := scanner.Text()
+
+			// Check YAML secret rules
+			if ss.rules != nil {
+				for _, rule := range ss.rules.SecretRules {
+					if rule.CompiledRegex != nil && rule.CompiledRegex.MatchString(line) {
+						redactedLine := RedactSecret(strings.TrimSpace(line))
+						assets = append(assets, models.CryptoAsset{
+							ID:             models.GenerateUUID(),
+							Name:           "Secret: " + rule.Name,
+							Type:           models.AssetKeyMaterial,
+							AssetType:      models.AssetKeyMaterial,
+							Algorithm:      rule.ID,
+							KeySize:        256,
+							Location:       relPath,
+							LineNumber:     lineNo,
+							ContextSnippet: "Redacted Secret Line: " + redactedLine,
+							RiskLevel:      models.RiskLevel(rule.RiskLevel),
+							PQCStatus:      models.StatusVulnerable,
+							PQCReplacement: "Rotate credential & use QuantumVault Secrets Manager",
+							RiskRationale:  "Hardcoded secret detected matching pattern " + rule.Name,
+							DiscoveredAt:   time.Now(),
+						})
+					}
+				}
+			}
+
+			// High Shannon Entropy String check (> 4.6 bits/char on secret token >= 32 chars)
+			// Extract pure secret tokens (alphanumeric with _, -, =) to avoid code syntax false positives
+			candidateRegex := regexp.MustCompile(`[a-zA-Z0-9_\-=]{32,}`)
+			for _, token := range candidateRegex.FindAllString(line, -1) {
+				// Skip URLs, common imports/keywords, or repeating string patterns
+				if strings.HasPrefix(token, "http") || strings.HasPrefix(token, "https") || strings.Contains(token, "import") {
+					continue
+				}
+
+				if calculateEntropy(token) > 4.6 {
+					redactedToken := RedactSecret(token)
+					assets = append(assets, models.CryptoAsset{
+						ID:             models.GenerateUUID(),
+						Name:           "High-Entropy Secret String",
+						Type:           models.AssetKeyMaterial,
+						AssetType:      models.AssetKeyMaterial,
+						Algorithm:      "HighEntropyToken",
+						KeySize:        len(token) * 8,
+						Location:       relPath,
+						LineNumber:     lineNo,
+						ContextSnippet: "High entropy token: " + redactedToken,
+						RiskLevel:      models.RiskHigh,
+						PQCStatus:      models.StatusVulnerable,
+						PQCReplacement: "Environment variable / Vault secret injection",
+						RiskRationale:  "High Shannon entropy string detected (potential API key or secret token).",
+						Confidence:     0.7,
+						DiscoveredAt:   time.Now(),
+					})
+				}
+			}
+		}
+
+		return nil
+	})
+
+	return assets, err
+}
+
+func filepathWalk(targetDir string, fn filepath.WalkFunc) error {
+	return filepath.Walk(targetDir, fn)
+}
+
+func calculateEntropy(s string) float64 {
+	if len(s) == 0 {
+		return 0
+	}
+	freq := make(map[rune]float64)
+	for _, char := range s {
+		freq[char]++
+	}
+
+	var entropy float64
+	length := float64(len(s))
+	for _, count := range freq {
+		p := count / length
+		entropy -= p * math.Log2(p)
+	}
+	return entropy
+}
+
+func isBinaryExt(ext string) bool {
+	binaries := map[string]bool{
+		".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".ico": true,
+		".exe": true, ".dll": true, ".so": true, ".dylib": true, ".zip": true,
+		".tar": true, ".gz": true, ".pdf": true, ".woff": true, ".ttf": true,
+		".pyc": true, ".pyo": true, ".class": true, ".o": true, ".obj": true,
+		".sqlite": true, ".db": true, ".wasm": true, ".bin": true,
+	}
+	return binaries[ext]
+}

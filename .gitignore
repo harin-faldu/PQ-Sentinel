@@ -1,0 +1,97 @@
+# ==========================
+# OS Files
+# ==========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==========================
+# IDE
+# ==========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ==========================
+# Logs
+# ==========================
+*.log
+logs/
+
+# ==========================
+# Environment
+# ==========================
+.env
+.env.*
+!.env.example
+
+# ==========================
+# Go Backend
+# ==========================
+backend/bin/
+backend/build/
+backend/dist/
+backend/coverage.out
+backend/*.exe
+backend/*.exe~
+backend/*.dll
+backend/*.so
+backend/*.dylib
+
+# Go test cache
+*.test
+
+# Coverage
+*.coverprofile
+
+# Vendor (Uncomment if not committing vendor)
+# backend/vendor/
+
+# ==========================
+# React + Vite
+# ==========================
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+
+# npm/yarn/pnpm logs
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# ==========================
+# Build
+# ==========================
+dist/
+build/
+coverage/
+
+# ==========================
+# Temporary files
+# ==========================
+tmp/
+temp/
+.cache/
+
+# ==========================
+# Certificates / Secrets
+# ==========================
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+
+# ==========================
+# Misc
+# ==========================
+*.bak
+*.tmp
+*.old
+
+# Always include sample_target
+!sample_target/
+!sample_target/**

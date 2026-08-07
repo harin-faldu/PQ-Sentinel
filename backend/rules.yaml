@@ -1,0 +1,605 @@
+version: "1.0"
+
+source_code_rules:
+  # SAFE Rules (Quantum-Safe & Modern Crypto)
+  - id: "PQC-SAFE-01"
+    name: "NIST ML-KEM Key Encapsulation (Kyber)"
+    pattern: "(generateKeyPair|createCipher|encapsulate|importKey|new|require|import).*?(ML-KEM|Kyber|kyber)|(ML-KEM|Kyber)\\s*[\\.\\(:]"
+    languages: ["javascript", "typescript", "python", "java", "go"]
+    algorithm: "ML-KEM-768"
+    key_size: 768
+    risk_level: "SAFE"
+    risk_rationale: "Native NIST FIPS 203 Post-Quantum Key Encapsulation Mechanism."
+    pqc_status: "QUANTUM_SAFE"
+    pqc_replacement: "None Required (NIST PQC Standard)"
+
+  - id: "PQC-SAFE-02"
+    name: "NIST ML-DSA Digital Signature (Dilithium)"
+    pattern: "(generateKeyPair|sign|verify|importKey|new|require|import).*?(ML-DSA|Dilithium|dilithium)|(ML-DSA|Dilithium)\\s*[\\.\\(:]"
+    languages: ["javascript", "typescript", "python", "java", "go"]
+    algorithm: "ML-DSA-65"
+    key_size: 65
+    risk_level: "SAFE"
+    risk_rationale: "Native NIST FIPS 204 Post-Quantum Digital Signature Algorithm."
+    pqc_status: "QUANTUM_SAFE"
+    pqc_replacement: "None Required (NIST PQC Standard)"
+
+  - id: "SAFE-AES-256"
+    name: "AES-256-GCM Symmetric Cipher"
+    pattern: "createCipheriv\\s*\\(\\s*['\"]aes-256-gcm['\"]"
+    languages: ["javascript", "typescript"]
+    algorithm: "AES-256-GCM"
+    key_size: 256
+    risk_level: "SAFE"
+    risk_rationale: "Symmetric 256-bit authenticated encryption provides 128-bit quantum security against Grover's algorithm."
+    pqc_status: "QUANTUM_SAFE"
+    pqc_replacement: "None Required (AES-256 is PQC Safe)"
+
+  - id: "SAFE-SHA-256"
+    name: "SHA-256 Secure Hash"
+    pattern: "(createHash\\s*\\(\\s*['\"]sha256['\"]|hashlib\\.sha256)"
+    languages: ["javascript", "typescript", "python"]
+    algorithm: "SHA-256"
+    key_size: 256
+    risk_level: "SAFE"
+    risk_rationale: "256-bit cryptographic hash function provides sufficient post-quantum collision resistance."
+    pqc_status: "QUANTUM_SAFE"
+    pqc_replacement: "None Required (SHA-256 is PQC Safe)"
+
+  # JavaScript / TypeScript (VULNERABLE / RISKY)
+  - id: "JS-CRYPTO-01"
+    name: "Legacy Hash Function (MD5)"
+    pattern: "crypto\\.createHash\\s*\\(\\s*['\"]md5['\"]\\)"
+    languages: ["javascript", "typescript"]
+    algorithm: "MD5"
+    key_size: 0
+    risk_level: "CRITICAL"
+    risk_rationale: "MD5 is cryptographically broken and vulnerable to collision attacks."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "SHA-256 / SHA-3 or ML-DSA (CRYSTALS-Dilithium) for auth"
+
+  - id: "JS-CRYPTO-02"
+    name: "Legacy Hash Function (SHA1)"
+    pattern: "crypto\\.createHash\\s*\\(\\s*['\"]sha1['\"]\\)"
+    languages: ["javascript", "typescript"]
+    algorithm: "SHA-1"
+    key_size: 0
+    risk_level: "HIGH"
+    risk_rationale: "SHA-1 is vulnerable to collision attacks and deprecated by NIST."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "SHA-256 or SHA-3"
+
+  - id: "JS-CRYPTO-03"
+    name: "RSA Key Generation (JS)"
+    pattern: "(generateKeyPair|createDiffieHellman)\\s*\\(\\s*['\"]rsa['\"]"
+    languages: ["javascript", "typescript"]
+    algorithm: "RSA"
+    key_size: 2048
+    key_size_capture: "modulusLength:\\s*(\\d+)"
+    risk_level: "HIGH"
+    risk_rationale: "RSA public key cryptography will be completely broken by quantum computers running Shor's algorithm."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "ML-KEM (Kyber) for encryption, ML-DSA (Dilithium) for signatures"
+
+  - id: "JS-CRYPTO-04"
+    name: "JWT Hardcoded Symmetric Secret"
+    pattern: "jsonwebtoken\\.sign\\s*\\(.*['\"][a-zA-Z0-9_-]{3,}['\"]"
+    languages: ["javascript", "typescript"]
+    algorithm: "HMAC-SHA256"
+    key_size: 256
+    risk_level: "CRITICAL"
+    risk_rationale: "Hardcoded JWT secret detected. Anyone with source code access can forge valid auth tokens."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "QuantumVault Managed Key or HSM Secret"
+
+  - id: "JS-CRYPTO-05"
+    name: "WebCrypto API RSA/ECDSA"
+    pattern: "subtle\\.(generateKey|importKey)\\s*\\(\\s*\\{\\s*name:\\s*['\"](RSASSA-PKCS1-v1_5|RSA-PSS|ECDSA|ECDH)['\"]"
+    languages: ["javascript", "typescript"]
+    algorithm: "RSA/ECDSA"
+    key_size: 2048
+    risk_level: "HIGH"
+    risk_rationale: "WebCrypto RSA/Elliptic Curve key generation is vulnerable to quantum Shor's algorithm."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "ML-KEM or SLH-DSA (Sphincs+)"
+
+  - id: "JS-CRYPTO-06"
+    name: "Deprecated Cipher (DES/3DES)"
+    pattern: "crypto\\.createCipheriv?\\s*\\(\\s*['\"](des|des-3des|des3|rc4)['\"]"
+    languages: ["javascript", "typescript"]
+    algorithm: "DES/RC4"
+    key_size: 56
+    risk_level: "CRITICAL"
+    risk_rationale: "DES/RC4 are legacy ciphers with known brute-force and stream weaknesses."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "AES-256-GCM or ChaCha20-Poly1305"
+
+  - id: "JS-CRYPTO-07"
+    name: "Weak RSA Key Length (< 2048)"
+    pattern: "modulusLength:\\s*(1024|512)"
+    languages: ["javascript", "typescript"]
+    algorithm: "RSA"
+    key_size: 1024
+    risk_level: "CRITICAL"
+    risk_rationale: "RSA key length under 2048 bits is factorable even by classical computers today."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "ML-KEM (Kyber-768 or Kyber-1024)"
+
+  # Python
+  - id: "PY-CRYPTO-01"
+    name: "Legacy Hash (MD5 - Python)"
+    pattern: "(hashlib\\.md5|MD5\\.new)"
+    languages: ["python"]
+    algorithm: "MD5"
+    key_size: 0
+    risk_level: "CRITICAL"
+    risk_rationale: "MD5 in Python is broken and susceptible to collision exploits."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "hashlib.sha256 or hashlib.sha3_256"
+
+  - id: "PY-CRYPTO-02"
+    name: "Legacy Hash (SHA1 - Python)"
+    pattern: "(hashlib\\.sha1|SHA\\.new)"
+    languages: ["python"]
+    algorithm: "SHA-1"
+    key_size: 0
+    risk_level: "HIGH"
+    risk_rationale: "SHA-1 in Python is deprecated by NIST."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "hashlib.sha256"
+
+  - id: "PY-CRYPTO-03"
+    name: "RSA Private Key Gen (Cryptography - Py)"
+    pattern: "rsa\\.generate_private_key"
+    languages: ["python"]
+    algorithm: "RSA"
+    key_size: 2048
+    key_size_capture: "key_size\\s*=\\s*(\\d+)"
+    risk_level: "HIGH"
+    risk_rationale: "Python cryptography RSA key generation is quantum-vulnerable."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "ML-KEM-768 or ML-DSA-65"
+
+  - id: "PY-CRYPTO-04"
+    name: "Elliptic Curve Key Gen (Cryptography - Py)"
+    pattern: "ec\\.generate_private_key"
+    languages: ["python"]
+    algorithm: "ECDSA/ECDH"
+    key_size: 256
+    risk_level: "HIGH"
+    risk_rationale: "ECC keys will be broken by Shor's algorithm on quantum hardware."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "ML-KEM (Kyber) / Falcon / ML-DSA"
+
+  - id: "PY-CRYPTO-05"
+    name: "PyCryptodome DES Cipher"
+    pattern: "DES\\.new\\("
+    languages: ["python"]
+    algorithm: "DES"
+    key_size: 56
+    risk_level: "CRITICAL"
+    risk_rationale: "DES cipher is obsolete and easily cracked."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "AES-256-GCM"
+
+  # Java
+  - id: "JV-CRYPTO-01"
+    name: "Java Cipher Instance (RSA)"
+    pattern: "Cipher\\.getInstance\\s*\\(\\s*['\"]RSA"
+    languages: ["java"]
+    algorithm: "RSA"
+    key_size: 2048
+    risk_level: "HIGH"
+    risk_rationale: "Java Cipher RSA usage is vulnerable to PQC threats."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "BouncyCastle PQC Provider (Kyber/Dilithium)"
+
+  - id: "JV-CRYPTO-02"
+    name: "Java MessageDigest MD5/SHA1"
+    pattern: "MessageDigest\\.getInstance\\s*\\(\\s*['\"](MD5|SHA-1|SHA1)['\"]"
+    languages: ["java"]
+    algorithm: "MD5/SHA-1"
+    key_size: 0
+    risk_level: "HIGH"
+    risk_rationale: "Legacy Java MessageDigest weak hashing."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "MessageDigest.getInstance(\"SHA-256\")"
+
+  - id: "JV-CRYPTO-03"
+    name: "Java KeyPairGenerator RSA/EC"
+    pattern: "KeyPairGenerator\\.getInstance\\s*\\(\\s*['\"](RSA|EC|ECDSA|DiffieHellman)['\"]"
+    languages: ["java"]
+    algorithm: "RSA/ECC"
+    key_size: 2048
+    risk_level: "HIGH"
+    risk_rationale: "Java standard KeyPairGenerator produces asymmetric keys broken by quantum computers."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "BouncyCastle PQC KeyPairGenerator"
+
+  # Go
+  - id: "GO-CRYPTO-01"
+    name: "Go rsa.GenerateKey"
+    pattern: "rsa\\.GenerateKey\\("
+    languages: ["go"]
+    algorithm: "RSA"
+    key_size: 2048
+    key_size_capture: "GenerateKey\\([^,]+,\\s*(\\d+)"
+    risk_level: "HIGH"
+    risk_rationale: "Go crypto/rsa key generation is susceptible to Shor's algorithm."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "circl/pqc/kyber or QuantumVault Go SDK"
+
+  - id: "GO-CRYPTO-02"
+    name: "Go ecdsa.GenerateKey"
+    pattern: "ecdsa\\.GenerateKey\\("
+    languages: ["go"]
+    algorithm: "ECDSA"
+    key_size: 256
+    risk_level: "HIGH"
+    risk_rationale: "Go crypto/ecdsa key generation is vulnerable to quantum attacks."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "circl/pqc/dilithium or ML-DSA"
+
+  - id: "GO-CRYPTO-03"
+    name: "Go sha1/md5 Package Usage"
+    pattern: "crypto/(sha1|md5)"
+    languages: ["go"]
+    algorithm: "MD5/SHA-1"
+    key_size: 0
+    risk_level: "HIGH"
+    risk_rationale: "Weak Go hash imports."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "crypto/sha256 or crypto/sha512"
+
+  # C / C++
+  - id: "C-CRYPTO-01"
+    name: "OpenSSL RSA_generate_key"
+    pattern: "RSA_generate_key"
+    languages: ["c", "cpp"]
+    algorithm: "RSA"
+    key_size: 2048
+    key_size_capture: "RSA_generate_key\\s*\\(\\s*(\\d+)"
+    risk_level: "HIGH"
+    risk_rationale: "OpenSSL classical RSA key generation is vulnerable to quantum decryption."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "liboqs (Open Quantum Safe) OQS_KEM_kyber_768"
+
+  - id: "C-CRYPTO-02"
+    name: "OpenSSL EVP_md5 / EVP_sha1"
+    pattern: "EVP_(md5|sha1)\\(\\)"
+    languages: ["c", "cpp"]
+    algorithm: "MD5/SHA-1"
+    key_size: 0
+    risk_level: "HIGH"
+    risk_rationale: "OpenSSL deprecated hash algorithms."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "EVP_sha256()"
+
+  # PHP
+  - id: "PHP-CRYPTO-01"
+    name: "PHP md5() Hash"
+    pattern: "\\bmd5\\s*\\("
+    languages: ["php"]
+    algorithm: "MD5"
+    key_size: 0
+    risk_level: "CRITICAL"
+    risk_rationale: "PHP md5() is cryptographically broken — collision attacks are trivial."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "hash('sha256', $data)"
+
+  - id: "PHP-CRYPTO-02"
+    name: "PHP sha1() Hash"
+    pattern: "\\bsha1\\s*\\("
+    languages: ["php"]
+    algorithm: "SHA-1"
+    key_size: 0
+    risk_level: "HIGH"
+    risk_rationale: "PHP sha1() is deprecated — NIST has retired SHA-1."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "hash('sha256', $data)"
+
+  - id: "PHP-CRYPTO-03"
+    name: "PHP openssl_encrypt DES/RC4"
+    pattern: "openssl_encrypt\\s*\\(.*['\"](des|rc4|bf)[-_]?"
+    languages: ["php"]
+    algorithm: "DES/RC4/Blowfish"
+    key_size: 56
+    risk_level: "CRITICAL"
+    risk_rationale: "PHP openssl_encrypt with legacy cipher — easily broken."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "openssl_encrypt($data, 'aes-256-gcm', ...)"
+
+  - id: "PHP-CRYPTO-04"
+    name: "PHP openssl_pkey_new RSA"
+    pattern: "openssl_pkey_new\\("
+    languages: ["php"]
+    algorithm: "RSA"
+    key_size: 2048
+    key_size_capture: "private_key_bits['\"]?\\s*=>\\s*(\\d+)"
+    risk_level: "HIGH"
+    risk_rationale: "PHP RSA key generation — quantum-vulnerable via Shor's algorithm."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "ML-KEM-768 or ML-DSA-65"
+
+  # Ruby
+  - id: "RB-CRYPTO-01"
+    name: "Ruby Digest::MD5"
+    pattern: "Digest::MD5"
+    languages: ["ruby"]
+    algorithm: "MD5"
+    key_size: 0
+    risk_level: "CRITICAL"
+    risk_rationale: "Ruby Digest::MD5 — cryptographically broken hash."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "Digest::SHA256"
+
+  - id: "RB-CRYPTO-02"
+    name: "Ruby Digest::SHA1"
+    pattern: "Digest::SHA1"
+    languages: ["ruby"]
+    algorithm: "SHA-1"
+    key_size: 0
+    risk_level: "HIGH"
+    risk_rationale: "Ruby Digest::SHA1 — deprecated by NIST."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "Digest::SHA256"
+
+  - id: "RB-CRYPTO-03"
+    name: "Ruby OpenSSL RSA Key"
+    pattern: "OpenSSL::PKey::RSA\\.(new|generate)"
+    languages: ["ruby"]
+    algorithm: "RSA"
+    key_size: 2048
+    key_size_capture: "(new|generate)\\s*\\(\\s*(\\d+)"
+    risk_level: "HIGH"
+    risk_rationale: "Ruby RSA key generation — quantum-vulnerable."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "ML-KEM-768 or ML-DSA-65"
+
+  - id: "RB-CRYPTO-04"
+    name: "Ruby OpenSSL DES Cipher"
+    pattern: "OpenSSL::Cipher\\.new\\s*\\(\\s*['\"](des|rc4|bf)"
+    languages: ["ruby"]
+    algorithm: "DES/RC4/Blowfish"
+    key_size: 56
+    risk_level: "CRITICAL"
+    risk_rationale: "Ruby OpenSSL with legacy cipher — obsolete and breakable."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "OpenSSL::Cipher.new('aes-256-gcm')"
+
+  # C# (.NET)
+  - id: "CS-CRYPTO-01"
+    name: "C# MD5.Create()"
+    pattern: "MD5\\.Create\\("
+    languages: ["csharp"]
+    algorithm: "MD5"
+    key_size: 0
+    risk_level: "CRITICAL"
+    risk_rationale: "C# MD5.Create() — cryptographically broken hash in .NET."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "SHA256.Create()"
+
+  - id: "CS-CRYPTO-02"
+    name: "C# SHA1.Create()"
+    pattern: "SHA1\\.Create\\("
+    languages: ["csharp"]
+    algorithm: "SHA-1"
+    key_size: 0
+    risk_level: "HIGH"
+    risk_rationale: "C# SHA1.Create() — deprecated by NIST."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "SHA256.Create()"
+
+  - id: "CS-CRYPTO-03"
+    name: "C# RSACryptoServiceProvider"
+    pattern: "RSACryptoServiceProvider\\("
+    languages: ["csharp"]
+    algorithm: "RSA"
+    key_size: 2048
+    key_size_capture: "RSACryptoServiceProvider\\s*\\(\\s*(\\d+)"
+    risk_level: "HIGH"
+    risk_rationale: "C# RSA key generation — quantum-vulnerable via Shor's algorithm."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "ML-KEM-768 or ML-DSA-65 (.NET PQC library)"
+
+  - id: "CS-CRYPTO-04"
+    name: "C# DESCryptoServiceProvider"
+    pattern: "DESCryptoServiceProvider\\("
+    languages: ["csharp"]
+    algorithm: "DES"
+    key_size: 56
+    risk_level: "CRITICAL"
+    risk_rationale: "C# DES cipher — obsolete 56-bit key, trivially crackable."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "AesCryptoServiceProvider (AES-256)"
+
+  - id: "CS-CRYPTO-05"
+    name: "C# TripleDESCryptoServiceProvider"
+    pattern: "TripleDESCryptoServiceProvider\\("
+    languages: ["csharp"]
+    algorithm: "3DES"
+    key_size: 168
+    risk_level: "HIGH"
+    risk_rationale: "C# 3DES — vulnerable to SWEET32 attack, deprecated."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "AesCryptoServiceProvider (AES-256)"
+
+  # Rust
+  - id: "RS-CRYPTO-01"
+    name: "Rust md5 Crate"
+    pattern: "(use md5|md5::compute|md5::Md5)"
+    languages: ["rust"]
+    algorithm: "MD5"
+    key_size: 0
+    risk_level: "CRITICAL"
+    risk_rationale: "Rust md5 crate — cryptographically broken hash."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "sha2::Sha256"
+
+  - id: "RS-CRYPTO-02"
+    name: "Rust sha1 Crate"
+    pattern: "(use sha1|sha1::Sha1)"
+    languages: ["rust"]
+    algorithm: "SHA-1"
+    key_size: 0
+    risk_level: "HIGH"
+    risk_rationale: "Rust sha1 crate — deprecated by NIST."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "sha2::Sha256"
+
+  - id: "RS-CRYPTO-03"
+    name: "Rust RSA Key Generation"
+    pattern: "RsaPrivateKey::new\\("
+    languages: ["rust"]
+    algorithm: "RSA"
+    key_size: 2048
+    key_size_capture: "RsaPrivateKey::new\\s*\\([^,]+,\\s*(\\d+)"
+    risk_level: "HIGH"
+    risk_rationale: "Rust RSA private key generation — quantum-vulnerable."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "pqcrypto::kem::kyber768 or ML-KEM"
+
+  # Kotlin
+  - id: "KT-CRYPTO-01"
+    name: "Kotlin MessageDigest MD5/SHA1"
+    pattern: "MessageDigest\\.getInstance\\s*\\(\\s*['\"](MD5|SHA-1|SHA1)['\"]"
+    languages: ["kotlin"]
+    algorithm: "MD5/SHA-1"
+    key_size: 0
+    risk_level: "HIGH"
+    risk_rationale: "Kotlin MessageDigest with weak hash — deprecated by NIST."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "MessageDigest.getInstance(\"SHA-256\")"
+
+  - id: "KT-CRYPTO-02"
+    name: "Kotlin Cipher.getInstance RSA"
+    pattern: "Cipher\\.getInstance\\s*\\(\\s*['\"]RSA"
+    languages: ["kotlin"]
+    algorithm: "RSA"
+    key_size: 2048
+    risk_level: "HIGH"
+    risk_rationale: "Kotlin RSA cipher — quantum-vulnerable via Shor's algorithm."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "BouncyCastle PQC (Kyber/Dilithium)"
+
+  - id: "KT-CRYPTO-03"
+    name: "Kotlin KeyPairGenerator RSA/EC"
+    pattern: "KeyPairGenerator\\.getInstance\\s*\\(\\s*['\"](RSA|EC|ECDSA)['\"]"
+    languages: ["kotlin"]
+    algorithm: "RSA/ECC"
+    key_size: 2048
+    risk_level: "HIGH"
+    risk_rationale: "Kotlin asymmetric key generation — quantum-vulnerable."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "BouncyCastle PQC KeyPairGenerator"
+
+  # Terraform (Infrastructure as Code)
+  - id: "TF-CRYPTO-01"
+    name: "Terraform tls_private_key RSA"
+    pattern: "algorithm\\s*=\\s*['\"]RSA['\"]"
+    languages: ["terraform"]
+    algorithm: "RSA"
+    key_size: 2048
+    key_size_capture: "rsa_bits\\s*=\\s*(\\d+)"
+    risk_level: "HIGH"
+    risk_rationale: "Terraform generating RSA private key — quantum-vulnerable infrastructure."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "algorithm = \"ED25519\" or PQC hybrid"
+
+  - id: "TF-CRYPTO-02"
+    name: "Terraform TLS 1.0/1.1"
+    pattern: "min_tls_version\\s*=\\s*['\"]TLS(v)?1\\.[01]['\"]"
+    languages: ["terraform"]
+    algorithm: "TLS 1.0/1.1"
+    key_size: 0
+    risk_level: "CRITICAL"
+    risk_rationale: "Terraform configuring deprecated TLS version — POODLE/BEAST vulnerable."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "min_tls_version = \"TLSv1.3\""
+
+  - id: "TF-CRYPTO-03"
+    name: "Terraform ECDSA Key"
+    pattern: "algorithm\\s*=\\s*['\"]ECDSA['\"]"
+    languages: ["terraform"]
+    algorithm: "ECDSA"
+    key_size: 256
+    risk_level: "HIGH"
+    risk_rationale: "Terraform generating ECDSA key — quantum-vulnerable via Shor's algorithm."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "algorithm = \"ED25519\" or PQC hybrid"
+
+  # Apache / NGINX Server Config (additional rules)
+  - id: "CFG-CRYPTO-01"
+    name: "Apache SSLProtocol TLS 1.0/1.1"
+    pattern: "SSLProtocol.*(\\+TLSv1\\b|\\+SSLv3)"
+    languages: ["config"]
+    algorithm: "TLS 1.0/SSLv3"
+    key_size: 0
+    risk_level: "CRITICAL"
+    risk_rationale: "Apache enabling deprecated TLS version — POODLE/BEAST attack surface."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "SSLProtocol -all +TLSv1.3 +TLSv1.2"
+
+  - id: "CFG-CRYPTO-02"
+    name: "Apache SSLCipherSuite Weak Ciphers"
+    pattern: "SSLCipherSuite.*(DES|RC4|MD5|3DES|EXPORT|NULL)"
+    languages: ["config"]
+    algorithm: "Weak Cipher Suite"
+    key_size: 0
+    risk_level: "CRITICAL"
+    risk_rationale: "Apache with weak cipher suite — FREAK/SWEET32 vulnerable."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "SSLCipherSuite ECDHE-ECDSA-AES256-GCM-SHA384"
+
+secret_rules:
+  - id: "SEC-AWS-01"
+    name: "AWS Access Key ID"
+    pattern: "(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}"
+    risk_level: "CRITICAL"
+
+  - id: "SEC-AWS-02"
+    name: "AWS Secret Access Key"
+    pattern: "(?i)aws_secret_access_key\\s*[:=]\\s*['\"][A-Za-z0-9/+=]{40}['\"]"
+    risk_level: "CRITICAL"
+
+  - id: "SEC-PRIVKEY-01"
+    name: "Unencrypted Private Key (PEM)"
+    pattern: "-----BEGIN (RSA|EC|DSA|OPENSSH|PRIVATE) KEY-----"
+    risk_level: "CRITICAL"
+
+  - id: "SEC-GH-01"
+    name: "GitHub Personal Access Token"
+    pattern: "ghp_[A-Za-z0-9_]{36}"
+    risk_level: "CRITICAL"
+
+  - id: "SEC-STRIPE-01"
+    name: "Stripe API Key"
+    pattern: "sk_live_[0-9a-zA-Z]{24}"
+    risk_level: "CRITICAL"
+
+  - id: "SEC-SLACK-01"
+    name: "Slack Bot Token"
+    pattern: "xoxb-[0-9]{10,13}-[0-9]{10,13}-[a-zA-Z0-9]{24}"
+    risk_level: "CRITICAL"
+
+  - id: "SEC-ENV-01"
+    name: "Hardcoded Password Variable"
+    pattern: "(?i)(password|passwd|db_pass|secret_key)\\s*[:=]\\s*['\"][^'\"]{6,}['\"]"
+    risk_level: "HIGH"
+
+tls_config_rules:
+  - id: "TLS-CFG-01"
+    name: "NGINX SSL Protocol TLS 1.0/1.1"
+    pattern: "ssl_protocols.*TLSv1(\\s|;)"
+    risk_level: "CRITICAL"
+    risk_rationale: "TLS 1.0 is deprecated, insecure, and non-compliant with PCI-DSS."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "TLS 1.3 with Hybrid PQC Key Exchange (X25519_Kyber768)"
+
+  - id: "TLS-CFG-02"
+    name: "Legacy Cipher Suite in Web Server Config"
+    pattern: "ssl_ciphers.*(DES|RC4|MD5|3DES|EXPORT)"
+    risk_level: "CRITICAL"
+    risk_rationale: "Weak TLS ciphers enabled in server configuration."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "ECDHE-ECDSA-AES256-GCM-SHA384 / PQC Hybrid"
