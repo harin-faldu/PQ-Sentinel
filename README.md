@@ -1,7 +1,7 @@
 # 🛡️ QuantumVault CBOM Scanner 2.0
 
 > **Enterprise-Grade Post-Quantum Cryptographic Bill of Materials (CBOM) & Risk Management Platform**  
-> *Built with Go 1.22+, React + Vite Web Dashboard, Tree-Sitter AST, Embedded Gitleaks v8, Active TLS Probing, GitHub App Ephemeral Git Clone Ingestion, and CycloneDX 1.6 Exporter*
+> *Built with Go 1.22+, React + Vite Web Dashboard, Tree-Sitter AST, Embedded Gitleaks v8, Active TLS Probing, Vercel-Style GitHub App Popup Ingestion, MySQL Auto-Migrations, and CycloneDX 1.6 Exporter*
 
 [![Go Version](https://img.shields.io/badge/Go-1.22%2B-00ADD8?style=flat-square&logo=go)](https://golang.org)
 [![React](https://img.shields.io/badge/React-18.2-61DAFB?style=flat-square&logo=react)](https://reactjs.org)
@@ -16,13 +16,15 @@
 ## 📌 Table of Contents
 
 - [Overview \& Vision](#-overview--vision)
-- [Architecture \& Engine Workflow](#-architecture--engine-workflow)
+- [Vercel-Style 1-Click GitHub App Authorization](#-vercel-style-1-click-github-app-authorization)
+- [System Architecture \& Workflow](#-system-architecture--workflow)
 - [Key Features \& Capabilities](#-key-features--capabilities)
 - [Dual Codebase Ingestion Modes](#-dual-codebase-ingestion-modes)
+- [Environment Configuration (`.env`)](#-environment-configuration-env)
 - [React Web Dashboard \& UI Features](#-react-web-dashboard--ui-features)
 - [Directory \& File Structure](#-directory--file-structure)
 - [NSA CNSA 2.0 Compliance Timelines](#-nsa-cnsa-20-compliance-timelines)
-- [Getting Started \& Installation](#-getting-started--installation)
+- [Getting Started \& 1-Minute GitHub Setup](#-getting-started--1-minute-github-setup)
 - [How to Run the Server \& Dashboard](#-how-to-run-the-server--dashboard)
 - [Testing \& Verification](#-testing--verification)
 - [License \& Security](#-license--security)
@@ -40,7 +42,7 @@ It calculates a **NIST PQC Readiness Score (0-100)**, tracks **NSA CNSA 2.0 regu
 │                           QUANTUMVAULT CBOM PLATFORM                            │
 │                                                                                 │
 │  ┌─────────────────────────────────┐     ┌───────────────────────────────────┐  │
-│  │ Mode 1: Local Codebase Directory│     │ Mode 2: GitHub App Ephemeral Clone│  │
+│  │ Mode 1: Local Codebase Directory│     │ Mode 2: Vercel GitHub Popup Ingest│  │
 │  └────────────────┬────────────────┘     └─────────────────┬─────────────────┘  │
 │                   │                                        │                    │
 │                   └──────────────────┬─────────────────────┘                    │
@@ -65,43 +67,55 @@ It calculates a **NIST PQC Readiness Score (0-100)**, tracks **NSA CNSA 2.0 regu
 
 ---
 
+## 🚀 Vercel-Style 1-Click GitHub App Authorization
+
+QuantumVault implements a modern, single-click **Vercel-style GitHub App Popup Authorization** experience:
+
+1. **Target Account Selector (`select_target`)**:
+   Backend constructs the official GitHub target selector URL:
+   $$\text{https://github.com/apps/}\mathbf{<app-slug>}\text{/installations/}\mathbf{select\_target}\text{?state=...}$$
+   GitHub automatically displays the **"Where do you want to install QuantumVault?"** screen, allowing users to pick between their **Personal Account** (e.g. `harin-faldu`) or any **Organization** (e.g. `securedapp-github`).
+
+2. **Centered Popup Window (`window.open`)**:
+   Clicking **"Install App on GitHub"** opens a centered `600x750px` popup window over Edge/Chrome. The main dashboard page remains active without reloading or losing state.
+
+3. **Cross-Window Listener (`postMessage`) & Auto-Close**:
+   Upon approving repositories, GitHub redirects the popup to `http://localhost:3000/?installation_id=XXXXX`. The popup extracts `installation_id`, posts a cross-window message `GITHUB_AUTH_SUCCESS` to the parent window, and **closes itself automatically (`window.close()`)**.
+
+4. **Automatic Server Restart Storage Purge**:
+   The Go backend generates a unique `ServerBootID` timestamp on startup. Whenever the server restarts (`go run ./cmd/server/main.go`), the React frontend detects the new instance ID and **empties `localStorage` automatically**, eliminating stale token errors.
+
+---
+
 ## 🔁 System Architecture & End-to-End Workflow
 
-```
-[1. User Action] ---> Click "Scan Codebase" on Web Dashboard
-                               │
-                               ▼
-[2. Ingestion Modal] -> Choose Mode 1 (Local Folder) OR Mode 2 (GitHub App Repo)
-                               │
-                               ▼
-[3. GitHub Auth] -----> (If Mode 2) Exchange RS256 JWT for 1-hr Installation Token
-                               │
-                               ▼
-[4. HEAD Check] ------> Call `git ls-remote`. If commit SHA matches LastScannedSHA,
-                        skip clone & return notice ("Repository commit unchanged").
-                               │
-                               ▼
-[5. Ephemeral Clone] -> Perform full `git clone` into temp dir (`defer os.RemoveAll`).
-                               │
-                               ▼
-[6. Discovery] -------> Run AST Tree-Sitter, Gitleaks history, AWS KMS, Docker, TLS.
-                               │
-                               ▼
-[7. SymbolGraph] -----> Aggregate call-site consumers (`details`), elevate scope weight.
-                               │
-                               ▼
-[8. Risk Engine] -----> Calculate PQC Score (0-100), CNSA 2.0 timeline & migration plan.
-                               │
-                               ▼
-[9. Persistence] -----> Save summary & assets into MySQL / Memory repository.
-                               │
-                               ▼
-[10. Presentation] ---> Render on React Dashboard & export CycloneDX 1.6 (JSON/XML).
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Dashboard as CBOM Dashboard (Main Window)
+    participant Popup as GitHub Popup (window.open)
+    participant GitHub as GitHub App Servers
+    participant Backend as CBOM Go Backend (MySQL)
+
+    User->>Dashboard: Clicks "Scan Codebase" -> "GitHub App Repository"
+    Dashboard->>Backend: GET /api/v1/github/install-url
+    Backend-->>Dashboard: Returns select_target URL + state token
+    Dashboard->>Popup: window.open(select_target_url, 'github_auth', 'width=600,height=750')
+    Popup->>GitHub: GET /apps/quantumvault-cbom-scanner/installations/select_target
+    GitHub-->>Popup: Renders Account Selector ("harin-faldu", "securedapp-github")
+    User->>Popup: Selects Account & Repositories -> Clicks "Install"
+    GitHub->>Popup: Redirects to Setup URL (http://localhost:3000/?installation_id=152345269)
+    Popup->>Dashboard: window.opener.postMessage({ type: 'GITHUB_AUTH_SUCCESS', installation_id: '152345269' })
+    Popup->>Popup: window.close()
+    Dashboard->>Backend: Auto-fetches repos for installation_id=152345269
+    Backend-->>Dashboard: Returns repository list
+    Dashboard-->>User: Renders authorized repositories in Ingestion Modal!
 ```
 
 ---
 
-## 🚀 Key Features & Capabilities
+## 🛠️ Key Features & Capabilities
 
 ### 1. 🌳 Tree-Sitter AST Syntax Parsing
 - Deep Concrete Syntax Tree (CST/AST) parsing for **12+ Language Families**:
@@ -137,13 +151,48 @@ It calculates a **NIST PQC Readiness Score (0-100)**, tracks **NSA CNSA 2.0 regu
 | Mode | Target Type | Backend Method | Description |
 |---|---|---|---|
 | **Mode 1: Local Codebase** | `TargetTypeRepo` (`REPO`) | `s.scanner.ScanDirectory(dir, scanID)` | Direct local filesystem scan for local codebases or staging directories. |
-| **Mode 2: GitHub Repository** | `TargetTypeGitHubRepo` (`GITHUB_REPO`) | `github.CloneRepository` + `s.scanner.ScanDirectory(tempDir, scanID)` | Remote GitHub App ephemeral `git clone` with full history secret scanning and auto-cleanup. |
+| **Mode 2: Vercel GitHub App** | `TargetTypeGitHubRepo` (`GITHUB_REPO`) | `github.CloneRepository` + `s.scanner.ScanDirectory(tempDir, scanID)` | Remote Vercel-style 1-click GitHub App popup ingestion with ephemeral `git clone` and auto-cleanup. |
+
+---
+
+## ⚙️ Environment Configuration (`.env`)
+
+The Go backend features an automatic line-by-line `.env` loader in `pkg/config/config.go`.
+
+### 1. [.env.example](file:///c:/CBOM/.env.example) *(Committed to Git as template)*
+Template file containing documented environment placeholders:
+
+```ini
+# Server Port & CORS
+PORT=8080
+ALLOW_ORIGINS=*
+
+# Database Connection (MySQL)
+DB_DRIVER=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your_db_password_here
+DB_NAME=qv_cbom
+
+# GitHub App Integration
+GITHUB_APP_ID=your_github_app_id_here
+GITHUB_APP_SLUG=your-github-app-slug-here
+GITHUB_PRIVATE_KEY_PATH=/path/to/your-github-app-private-key.pem
+```
+
+### 2. [.env](file:///c:/CBOM/.env) *(Ignored by Git for security)*
+Copy `.env.example` to `.env` in the root folder and add your local credentials:
+
+```powershell
+cp .env.example .env
+```
 
 ---
 
 ## 🎨 React Web Dashboard & UI Features
 
-- **Ingestion Modal ([IngestionModal.jsx](file:///c:/CBOM/frontend/src/components/IngestionModal.jsx))**: Codebase selection modal for Local Directories & Remote GitHub App Repositories.
+- **Vercel-Style Ingestion Modal ([IngestionModal.jsx](file:///c:/CBOM/frontend/src/components/IngestionModal.jsx))**: Popup authorization modal for Local Directories & Remote GitHub App Repositories.
 - **CycloneDX 1.6 Exporter Modal ([CycloneDXExportModal.jsx](file:///c:/CBOM/frontend/src/components/CycloneDXExportModal.jsx))**: Live JSON & XML viewers with 1-click **Copy to Clipboard** and **File Download**.
 - **Interactive Asset Inventory ([AssetTable.jsx](file:///c:/CBOM/frontend/src/components/AssetTable.jsx))**: Multi-filter search by asset type, severity, and SymbolGraph consumer call sites.
 - **Automated Migration Strategy ([MigrationPlannerPage.jsx](file:///c:/CBOM/frontend/src/pages/MigrationPlannerPage.jsx))**: Step-by-step PQC remediation playbooks mapping vulnerable assets to NIST ML-DSA & ML-KEM algorithms.
@@ -155,47 +204,51 @@ It calculates a **NIST PQC Readiness Score (0-100)**, tracks **NSA CNSA 2.0 regu
 
 ```
 c:\CBOM
+├── .env                             # Active Local Environment Configuration (Ignored)
+├── .env.example                     # Environment Configuration Template
+├── .gitignore                       # Git ignore rules (.env, build binaries, .pem keys)
 ├── backend/
 │   ├── cmd/
-│   │   ├── scanner/main.go            # CLI Scanner Binary
-│   │   └── server/main.go             # REST API Server Entry Point
+│   │   ├── scanner/main.go          # CLI Scanner Binary
+│   │   └── server/main.go           # REST API Server Entry Point
 │   ├── internal/
 │   │   ├── controllers/
-│   │   │   ├── cbom_controller.go     # Scans, Targets & Migration Handlers
-│   │   │   └── github_controller.go   # GitHub App Repo Picker Handler
+│   │   │   ├── cbom_controller.go   # Scans, Targets & Migration Handlers
+│   │   │   └── github_controller.go # Vercel-style select_target & Repos Handler
 │   │   ├── github/
-│   │   │   ├── auth.go                # RS256 JWT & Token Exchange
-│   │   │   ├── client.go              # Installation Repos API
-│   │   │   └── clone.go               # Ephemeral Git Clone & Redaction
-│   │   ├── models/models.go           # Core Data Models & CycloneDX Structs
+│   │   │   ├── auth.go              # RS256 JWT & Token Exchange
+│   │   │   ├── client.go            # Installation Repos API
+│   │   │   └── clone.go             # Ephemeral Git Clone & Redaction
+│   │   ├── models/models.go         # Core Data Models & CycloneDX Structs
 │   │   ├── repository/
-│   │   │   └── cbom_repository.go     # MySQL & Memory Storage Layer
-│   │   ├── risk/risk_engine.go        # Risk Score Engine & Remediation Playbooks
+│   │   │   └── cbom_repository.go   # MySQL (Auto Database Creation) & Memory Storage
+│   │   ├── risk/risk_engine.go      # Risk Score Engine & Remediation Playbooks
 │   │   ├── scanner/
-│   │   │   ├── scanner.go             # Core Scanner Orchestrator
-│   │   │   ├── symbol_graph.go        # Symbol Call-Site Tracing & Scope Elevation
-│   │   │   ├── aws_kms_scanner.go     # Live AWS KMS & IaC Scanner
-│   │   │   ├── container_scanner.go   # Container & Syft Scanner
-│   │   │   ├── secret_scanner.go      # Gitleaks History Scanner
-│   │   │   ├── cert_scanner.go        # X.509 & Keystore Scanner
-│   │   │   └── tls_prober.go          # Active Multi-Port TLS Prober
-│   │   └── utils/secretbox.go         # AES-256-GCM Secret Encryption Box
-│   └── rules.yaml                     # Crypto Detection Rules Definition
+│   │   │   ├── scanner.go           # Core Scanner Orchestrator
+│   │   │   ├── symbol_graph.go      # Symbol Call-Site Tracing & Scope Elevation
+│   │   │   ├── aws_kms_scanner.go   # Live AWS KMS & IaC Scanner
+│   │   │   ├── container_scanner.go # Container & Syft Scanner
+│   │   │   ├── secret_scanner.go    # Gitleaks History Scanner
+│   │   │   ├── cert_scanner.go      # X.509 & Keystore Scanner
+│   │   │   └── tls_prober.go        # Active Multi-Port TLS Prober
+│   │   └── utils/secretbox.go       # AES-256-GCM Secret Encryption Box
+│   ├── pkg/config/config.go         # Auto .env loader & Configuration Manager
+│   └── rules.yaml                   # Crypto Detection Rules Definition
 ├── frontend/
 │   ├── src/
-│   │   ├── api/client.js              # REST API Client
+│   │   ├── api/client.js            # REST API Client
 │   │   ├── components/
-│   │   │   ├── Navbar.jsx             # Top Navigation Header
-│   │   │   ├── IngestionModal.jsx     # Ingestion Modal (Local + GitHub App)
+│   │   │   ├── Navbar.jsx           # Responsive Navigation Header Bar
+│   │   │   ├── IngestionModal.jsx   # Ingestion Modal (Local + Vercel GitHub Popup)
 │   │   │   ├── CycloneDXExportModal.jsx # CycloneDX JSON/XML Exporter Modal
-│   │   │   ├── AssetTable.jsx         # Inventory Asset Table
-│   │   │   ├── OverviewCards.jsx      # Summary Cards
-│   │   │   └── RiskGauge.jsx          # PQC Risk Gauge Component
-│   │   ├── hooks/useCbomScan.js       # Scan & Target State Hook
-│   │   └── pages/                     # Dashboard, Inventory, Risk & Migration Pages
-│   ├── vite.config.js                 # Vite Dev Server & API Proxy
+│   │   │   ├── AssetTable.jsx       # Inventory Asset Table
+│   │   │   ├── OverviewCards.jsx    # Summary Cards
+│   │   │   └── RiskGauge.jsx        # PQC Risk Gauge Component
+│   │   ├── hooks/useCbomScan.js     # Scan, Target & Popup Message State Hook
+│   │   └── pages/                   # Dashboard, Inventory, Risk & Migration Pages
+│   ├── vite.config.js               # Vite Dev Server & API Proxy
 │   └── package.json
-└── sample_target/                     # Comprehensive Testbed Folder
+└── sample_target/                   # Comprehensive Testbed Folder
 ```
 
 ---
@@ -211,25 +264,49 @@ c:\CBOM
 
 ---
 
+## ⚙️ Getting Started & 1-Minute GitHub Setup
+
+### 1. Setup URL Configuration (Owner One-Time Setup)
+
+To ensure GitHub knows where to redirect after popup authorization:
+
+1. Open your GitHub App settings: [https://github.com/settings/apps](https://github.com/settings/apps) → Click your app (**QuantumVault-CBOM-Scanner**).
+2. Scroll down to **"Setup URL (Optional)"**.
+3. Enter: `http://localhost:3000/`
+4. Click **Save Changes**.
+
+---
+
 ## 💻 How to Run the Server & Dashboard
 
-### Step 1: Start Backend REST API Server (Terminal 1)
+### Step 1: Create `.env` Configuration File
 
-Optionally configure environment variables for GitHub App ingestion:
+Copy `.env.example` to `.env` in the root folder:
+
+```powershell
+cp .env.example .env
+```
+
+Ensure your GitHub App ID, Slug, and Private Key Path are set in `.env`:
+```ini
+GITHUB_APP_ID=4534008
+GITHUB_APP_SLUG=quantumvault-cbom-scanner
+GITHUB_PRIVATE_KEY_PATH=C:\Users\harin\Downloads\quantumvault-cbom-scanner.2026-08-08.private-key.pem
+```
+
+---
+
+### Step 2: Start Backend REST API Server (Terminal 1)
 
 ```powershell
 cd c:\CBOM\backend
-
-# Optional GitHub App Credentials
-$env:GITHUB_APP_ID="4534008"
-$env:GITHUB_PRIVATE_KEY_PATH="C:\path\to\your-app-private-key.pem"
-
-# Start backend API server
 go run ./cmd/server/main.go
 ```
-*The Go server runs on `http://localhost:8081` (or `8080`).*
+*The Go server connects to MySQL (auto-creates `qv_cbom` DB and tables) and runs on `http://localhost:8080` (or `8081`).*
 
-### Step 2: Start Frontend Web Dashboard (Terminal 2)
+---
+
+### Step 3: Start Frontend Web Dashboard (Terminal 2)
 
 ```powershell
 cd c:\CBOM\frontend
@@ -237,11 +314,16 @@ npm run dev
 ```
 *The Vite Dev Server runs on `http://localhost:3000` with automatic API proxying.*
 
-### Step 3: Test via Web Dashboard (`http://localhost:3000`)
+---
 
-1. **Local Codebase Scan**: Click **"Scan Codebase"** → Select **"Local Directory Codebase"** → Enter `sample_target` → Click **"Start Local Scan"**.
-2. **GitHub App Repo Scan**: Click **"Scan Codebase"** → Select **"GitHub App Repository"** → Enter Installation ID → Click **"Fetch Repositories"** → Select repo → Click **"Scan Selected Repository"**.
-3. **CycloneDX 1.6 Export**: Click **"CycloneDX 1.6"** in top navbar → Switch between JSON and XML views → Click **"Copy Content"** or **"Download File"**.
+### Step 4: Test Vercel-Style Ingestion Flow (`http://localhost:3000`)
+
+1. Open `http://localhost:3000` in Edge or Chrome.
+2. Click **"Scan Codebase"** → Select **"GitHub App Repository"** tab.
+3. Click the green **"Install App on GitHub"** button.
+4. A centered `600x750px` popup window opens displaying GitHub's official **"Where do you want to install QuantumVault?"** account selector.
+5. Pick your Personal Account (`harin-faldu`) or Organization (`securedapp-github`), select repositories, and click **"Install"**.
+6. The popup window auto-closes (`window.close()`) and all authorized repositories immediately populate in the CBOM dashboard!
 
 ---
 
@@ -270,4 +352,4 @@ go test -v ./...
 ## 📄 License & Security
 
 - **License**: Proprietary / Enterprise Security Tool.
-- **Security Notice**: Never commit RSA `.pem` private keys or AWS secret access keys into public repositories. Use environment variables (`GITHUB_PRIVATE_KEY_PATH`, `MASTER_KEY`) for secure key management.
+- **Security Notice**: Never commit RSA `.pem` private keys or AWS secret access keys into public repositories. Use `.env` file or environment variables (`GITHUB_PRIVATE_KEY_PATH`, `MASTER_KEY`) for secure key management.
