@@ -118,5 +118,35 @@
     "medium": 0,
     "safe": 0,
     "timestamp": "2026-08-10T10:46:21.6307847+05:30"
+  },
+  {
+    "scan_id": "scan-1786342518",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-10T11:45:18.8327144+05:30"
+  },
+  {
+    "scan_id": "scan-1786346315",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-10T12:48:35.6221231+05:30"
+  },
+  {
+    "scan_id": "scan-1786347018",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-10T13:00:18.2302487+05:30"
   }
 ]

@@ -78,9 +78,13 @@ export function useCbomScan() {
       setError(null);
       const repos = await api.getGitHubRepos(installationId);
       setGithubRepos(repos || []);
+      if (installationId) {
+        localStorage.setItem('cbom_github_installation_id', installationId);
+      }
       return repos;
     } catch (err) {
-      setError(`GitHub App Error: ${err.message}`);
+      localStorage.removeItem('cbom_github_installation_id');
+      setError(`GitHub App Connection: ${err.message}. Please install or re-authorize the app.`);
       throw err;
     } finally {
       setLoadingRepos(false);

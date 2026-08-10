@@ -42,6 +42,7 @@ func main() {
 	mux.HandleFunc("/api/v1/scans", cbomController.HandleScans)
 	mux.HandleFunc("/api/v1/scans/", cbomController.HandleScanDetail)
 	mux.HandleFunc("/api/v1/github/repos", githubController.HandleListRepos)
+	mux.HandleFunc("/api/v1/github/install-url", githubController.HandleInstallURL)
 
 	// Apply Middlewares: CORS -> Logger -> Recovery -> Handler
 	handler := middleware.CORS(middleware.Logger(middleware.Recovery(mux)))

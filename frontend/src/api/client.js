@@ -52,6 +52,7 @@ export const api = {
 
   // GitHub App Integration
   getGitHubRepos: (installationId) => fetchApi(`/github/repos?installation_id=${installationId}`),
+  getGitHubInstallUrl: () => fetchApi('/github/install-url'),
 
   // Migration Plan & CycloneDX Export
   getMigrationPlan: (scanId) => fetchApi(`/scans/${scanId}/migration`),

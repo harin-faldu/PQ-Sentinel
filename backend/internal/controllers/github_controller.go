@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/quantumpq/qv-cbom/internal/github"
 )
@@ -130,4 +131,28 @@ func (c *GitHubController) HandleListRepos(w http.ResponseWriter, r *http.Reques
 	}
 
 	json.NewEncoder(w).Encode(repos)
+}
+
+var ServerBootID = fmt.Sprintf("%d", time.Now().UnixNano())
+
+// HandleInstallURL returns the 1-click GitHub App Authorization/Installation URL
+func (c *GitHubController) HandleInstallURL(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	appSlug := os.Getenv("GITHUB_APP_SLUG")
+	if appSlug == "" {
+		appSlug = "quantumvault-cbom-scanner"
+	}
+
+	installURL := fmt.Sprintf("https://github.com/apps/%s/installations/new", appSlug)
+	loginURL := fmt.Sprintf("https://github.com/login?return_to=%%2Fapps%%2F%s%%2Finstallations%%2Fnew", appSlug)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"server_instance_id": ServerBootID,
+		"install_url":        installURL,
+		"login_url":          loginURL,
+		"logout_url":         "https://github.com/logout",
+		"app_slug":           appSlug,
+		"app_configured":     c.appID != "" && c.privateKey != nil,
+	})
 }

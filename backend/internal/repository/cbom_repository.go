@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -428,6 +429,9 @@ type MySQLRepository struct {
 }
 
 func NewMySQLRepository(dbSource string) (*MySQLRepository, error) {
+	// Auto-create database if specified in DSN
+	ensureDatabaseExists(dbSource)
+
 	db, err := sql.Open("mysql", dbSource)
 	if err != nil {
 		return nil, err
@@ -442,9 +446,40 @@ func NewMySQLRepository(dbSource string) (*MySQLRepository, error) {
 
 	repo := &MySQLRepository{db: db}
 	if err := repo.createTables(); err != nil {
-		log.Printf("Warning: MySQL table creation failed: %v", err)
+		log.Printf("Error: MySQL table creation failed: %v", err)
+		return nil, fmt.Errorf("failed to create tables: %w", err)
 	}
 	return repo, nil
+}
+
+func ensureDatabaseExists(dbSource string) {
+	// Parse DSN format: user:pass@tcp(host:port)/dbname?opts
+	idxSlash := strings.Index(dbSource, "/")
+	if idxSlash == -1 {
+		return
+	}
+	sub := dbSource[idxSlash+1:]
+	idxQuestion := strings.Index(sub, "?")
+	dbName := sub
+	if idxQuestion != -1 {
+		dbName = sub[:idxQuestion]
+	}
+	if dbName == "" {
+		return
+	}
+
+	rootDSN := dbSource[:idxSlash+1]
+	if idxQuestion != -1 {
+		rootDSN += sub[idxQuestion:]
+	}
+
+	tempDB, err := sql.Open("mysql", rootDSN)
+	if err != nil {
+		return
+	}
+	defer tempDB.Close()
+
+	_, _ = tempDB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", dbName))
 }
 
 func (r *MySQLRepository) createTables() error {
@@ -501,9 +536,15 @@ func (r *MySQLRepository) createTables() error {
 		FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
 	);`
 
-	_, _ = r.db.Exec(targetsTable)
-	_, _ = r.db.Exec(scansTable)
-	_, _ = r.db.Exec(assetsTable)
+	if _, err := r.db.Exec(targetsTable); err != nil {
+		return fmt.Errorf("failed to create targets table: %w", err)
+	}
+	if _, err := r.db.Exec(scansTable); err != nil {
+		return fmt.Errorf("failed to create scans table: %w", err)
+	}
+	if _, err := r.db.Exec(assetsTable); err != nil {
+		return fmt.Errorf("failed to create crypto_assets table: %w", err)
+	}
 
 	// Idempotent column additions for existing installations
 	_, _ = r.db.Exec(`ALTER TABLE targets ADD COLUMN installation_id BIGINT NULL`)

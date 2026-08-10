@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Folder, GitBranch, Key, RefreshCw, X, ShieldAlert, CheckCircle2, ArrowRight } from 'lucide-react';
+import { api } from '../api/client';
 
 export function IngestionModal({ isOpen, onClose, onStartLocal, onFetchGitHubRepos, onStartGitHub, loadingRepos, githubRepos, scanning }) {
   const [activeTab, setActiveTab] = useState('local'); // 'local' | 'github'
@@ -7,10 +8,26 @@ export function IngestionModal({ isOpen, onClose, onStartLocal, onFetchGitHubRep
   const [targetName, setTargetName] = useState('');
 
   // GitHub App state
-  const [installationId, setInstallationId] = useState('123456');
+  const [installationId, setInstallationId] = useState(() => localStorage.getItem('cbom_github_installation_id') || '');
   const [selectedRepo, setSelectedRepo] = useState(null);
   const [githubFetched, setGithubFetched] = useState(false);
   const [modalError, setModalError] = useState(null);
+
+  React.useEffect(() => {
+    const savedId = localStorage.getItem('cbom_github_installation_id');
+    const idToUse = savedId || installationId;
+    if (activeTab === 'github' && idToUse && (!githubRepos || githubRepos.length === 0) && !githubFetched && !loadingRepos) {
+      setModalError(null);
+      onFetchGitHubRepos(idToUse)
+        .then(() => setGithubFetched(true))
+        .catch((err) => {
+          setModalError('GitHub Installation token expired or revoked. Please click "Install from GitHub" below.');
+          localStorage.removeItem('cbom_github_installation_id');
+          setInstallationId('');
+          setGithubFetched(true);
+        });
+    }
+  }, [activeTab, installationId, githubRepos, githubFetched, loadingRepos, onFetchGitHubRepos]);
 
   if (!isOpen) return null;
 
@@ -246,122 +263,111 @@ export function IngestionModal({ isOpen, onClose, onStartLocal, onFetchGitHubRep
             </form>
           ) : (
             <div>
-              {/* Step 1: Fetch GitHub Repos */}
-              <form onSubmit={handleFetchRepos} style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#cbd5e1', marginBottom: '6px' }}>
-                  GitHub App Installation ID
-                </label>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <div style={{ position: 'relative', flex: 1 }}>
-                    <Key style={{ position: 'absolute', left: '12px', top: '12px', width: '16px', height: '16px', color: '#64748b' }} />
-                    <input
-                      type="text"
-                      value={installationId}
-                      onChange={(e) => setInstallationId(e.target.value)}
-                      placeholder="Enter GitHub App Installation ID (e.g. 123456)"
-                      required
-                      style={{
-                        width: '100%',
-                        padding: '10px 14px 10px 36px',
-                        borderRadius: '8px',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        backgroundColor: '#1e293b',
-                        color: '#f8fafc',
-                        fontSize: '14px',
-                        outline: 'none',
-                      }}
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loadingRepos}
-                    style={{
-                      padding: '10px 18px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      backgroundColor: '#334155',
-                      color: '#f8fafc',
-                      fontWeight: '600',
-                      cursor: loadingRepos ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <RefreshCw className={loadingRepos ? 'animate-spin' : ''} style={{ width: '16px', height: '16px' }} />
-                    {loadingRepos ? 'Fetching...' : 'Fetch Repositories'}
-                  </button>
+              {modalError && (
+                <div style={{
+                  marginBottom: '16px',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#fca5a5',
+                  fontSize: '13px',
+                  lineHeight: '1.4',
+                }}>
+                  <strong>GitHub Authorization Error:</strong> {modalError}
                 </div>
+              )}
 
-                {modalError && (
-                  <div style={{
-                    marginTop: '12px',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    color: '#fca5a5',
-                    fontSize: '13px',
-                    lineHeight: '1.4',
-                  }}>
-                    <strong>GitHub Authorization Error:</strong> {modalError}
+              {/* State 1: Loading Repositories */}
+              {loadingRepos ? (
+                <div style={{
+                  backgroundColor: 'rgba(30, 41, 59, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '12px',
+                  padding: '40px 20px',
+                  textAlign: 'center',
+                }}>
+                  <RefreshCw className="animate-spin" style={{ color: '#38bdf8', width: '32px', height: '32px', margin: '0 auto 12px auto' }} />
+                  <div style={{ fontSize: '15px', fontWeight: '600', color: '#f8fafc' }}>
+                    Fetching Authorized Repositories...
                   </div>
-                )}
-                <span style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'block' }}>
-                  Uses RS256 App JWT to exchange for short-lived Installation Access Tokens.
-                </span>
-              </form>
-
-              {/* Step 2: Repository Picker */}
-              {githubFetched && (
+                  <div style={{ fontSize: '13px', color: '#94a3b8', marginTop: '4px' }}>
+                    Exchanging GitHub App credentials for active repository access tokens.
+                  </div>
+                </div>
+              ) : githubRepos && githubRepos.length > 0 ? (
+                /* State 2: Show Repositories List */
                 <form onSubmit={handleGitHubScanSubmit}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#cbd5e1', marginBottom: '8px' }}>
-                    Select Repository to Scan ({githubRepos.length} Available)
-                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1' }}>
+                      Select Repository to Scan ({githubRepos.length} Repositories Available)
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await api.getGitHubInstallUrl();
+                          if (res && res.install_url) {
+                            window.location.href = res.install_url;
+                          }
+                        } catch (err) {
+                          setModalError('Failed to load GitHub Install URL: ' + err.message);
+                        }
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#38bdf8',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      + Install on another account / Add Repos
+                    </button>
+                  </div>
 
                   <div style={{
-                    maxHeight: '200px',
+                    maxHeight: '260px',
                     overflowY: 'auto',
                     border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '8px',
+                    borderRadius: '10px',
                     backgroundColor: '#1e293b',
                     marginBottom: '20px',
                   }}>
-                    {githubRepos.length === 0 ? (
-                      <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
-                        No accessible repositories found for Installation ID {installationId}.
-                      </div>
-                    ) : (
-                      githubRepos.map((repo) => (
-                        <div
-                          key={repo.id}
-                          onClick={() => setSelectedRepo(repo)}
-                          style={{
-                            padding: '12px 16px',
-                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            cursor: 'pointer',
-                            backgroundColor: selectedRepo?.id === repo.id ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
-                          }}
-                        >
-                          <div>
-                            <div style={{ fontWeight: '600', color: '#f8fafc', fontSize: '14px' }}>
-                              {repo.full_name}
-                            </div>
-                            <div style={{ fontSize: '12px', color: '#64748b' }}>
-                              Default Branch: {repo.default_branch || 'main'} {repo.private ? '• Private' : '• Public'}
-                            </div>
+                    {githubRepos.map((repo) => (
+                      <div
+                        key={repo.id}
+                        onClick={() => setSelectedRepo(repo)}
+                        style={{
+                          padding: '12px 16px',
+                          borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          backgroundColor: selectedRepo?.id === repo.id ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                          transition: 'background 0.15s ease',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: '600', color: '#f8fafc', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <GitBranch style={{ width: '15px', height: '15px', color: '#38bdf8' }} />
+                            {repo.full_name}
                           </div>
-                          {selectedRepo?.id === repo.id && (
-                            <CheckCircle2 style={{ color: '#38bdf8', width: '18px', height: '18px' }} />
-                          )}
+                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                            Default Branch: <span style={{ color: '#cbd5e1' }}>{repo.default_branch || 'main'}</span> {repo.private ? '• Private' : '• Public'}
+                          </div>
                         </div>
-                      ))
-                    )}
+                        {selectedRepo?.id === repo.id && (
+                          <CheckCircle2 style={{ color: '#38bdf8', width: '18px', height: '18px' }} />
+                        )}
+                      </div>
+                    ))}
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
@@ -402,6 +408,77 @@ export function IngestionModal({ isOpen, onClose, onStartLocal, onFetchGitHubRep
                     </button>
                   </div>
                 </form>
+              ) : (
+                /* State 3: Show "Install from GitHub" 1-Click Button */
+                <div style={{
+                  backgroundColor: 'rgba(30, 41, 59, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '12px',
+                  padding: '28px 20px',
+                  textAlign: 'center',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
+                    <svg height="42" viewBox="0 0 16 16" version="1.1" width="42" fill="#f8fafc">
+                      <path fillRule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                    </svg>
+                  </div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#f8fafc', marginBottom: '6px' }}>
+                    Sign in & Install App on GitHub
+                  </h3>
+                  <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px', maxWidth: '460px', margin: '0 auto 20px auto', lineHeight: '1.5' }}>
+                    Click below to sign in to your GitHub account or organization and authorize the QuantumVault scanner app. Once signed in, your authorized repositories will automatically list here.
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await api.getGitHubInstallUrl();
+                          if (res && res.install_url) {
+                            window.location.href = res.install_url;
+                          }
+                        } catch (err) {
+                          setModalError('Failed to load GitHub Install URL: ' + err.message);
+                        }
+                      }}
+                      style={{
+                        padding: '12px 24px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        backgroundColor: '#16a34a',
+                        color: '#ffffff',
+                        fontWeight: '700',
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        boxShadow: '0 4px 14px rgba(22, 163, 74, 0.4)',
+                      }}
+                    >
+                      <svg height="20" viewBox="0 0 16 16" version="1.1" width="20" fill="#ffffff">
+                        <path fillRule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                      </svg>
+                      Install App on GitHub
+                    </button>
+
+                    <a
+                      href="https://github.com/logout"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: '12px',
+                        color: '#38bdf8',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        marginTop: '4px',
+                      }}
+                    >
+                      Need to log into a different GitHub account? Log out on GitHub first
+                    </a>
+                  </div>
+                </div>
               )}
             </div>
           )}

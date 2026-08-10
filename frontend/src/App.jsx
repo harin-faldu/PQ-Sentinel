@@ -30,6 +30,33 @@ export function App() {
     setError,
   } = useCbomScan();
 
+  React.useEffect(() => {
+    // Detect if backend server restarted; if so, clear localStorage automatically
+    import('./api/client').then(({ api }) => {
+      api.getGitHubInstallUrl()
+        .then((res) => {
+          if (res && res.server_instance_id) {
+            const storedServerID = localStorage.getItem('cbom_server_instance_id');
+            if (storedServerID && storedServerID !== res.server_instance_id) {
+              console.log('Backend server restart detected. Clearing localStorage...');
+              localStorage.clear();
+            }
+            localStorage.setItem('cbom_server_instance_id', res.server_instance_id);
+          }
+        })
+        .catch(() => {});
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    const installationId = params.get('installation_id');
+    if (installationId) {
+      localStorage.setItem('cbom_github_installation_id', installationId);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setIsIngestionOpen(true);
+      fetchGitHubRepositories(installationId).catch(() => {});
+    }
+  }, []);
+
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '40px', backgroundColor: '#0f172a', color: '#f8fafc' }}>
       {/* Navigation Header Bar */}

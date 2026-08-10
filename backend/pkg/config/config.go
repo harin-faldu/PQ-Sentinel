@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -12,6 +13,8 @@ type Config struct {
 }
 
 func LoadConfig() *Config {
+	loadDotEnv()
+
 	port := getEnv("PORT", "8080")
 	dbDriver := getEnv("DB_DRIVER", "mysql")
 	dbHost := getEnv("DB_HOST", "127.0.0.1")
@@ -39,4 +42,31 @@ func getEnv(key, fallback string) string {
 		return val
 	}
 	return fallback
+}
+
+func loadDotEnv() {
+	paths := []string{".env", "../.env", "../../.env"}
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				k := strings.TrimSpace(parts[0])
+				v := strings.TrimSpace(parts[1])
+				v = strings.Trim(v, `"'`)
+				if os.Getenv(k) == "" {
+					os.Setenv(k, v)
+				}
+			}
+		}
+		break
+	}
 }
