@@ -31,6 +31,28 @@ export function App() {
   } = useCbomScan();
 
   React.useEffect(() => {
+    // If inside GitHub Authorization popup window, notify opener and close
+    if (window.opener && window.opener !== window) {
+      const params = new URLSearchParams(window.location.search);
+      const instId = params.get('installation_id');
+      if (instId) {
+        window.opener.postMessage({ type: 'GITHUB_AUTH_SUCCESS', installation_id: instId }, '*');
+        window.close();
+        return;
+      }
+    }
+
+    // Listen for postMessage from popup window
+    const handleMessage = (event) => {
+      if (event.data && event.data.type === 'GITHUB_AUTH_SUCCESS' && event.data.installation_id) {
+        const instId = event.data.installation_id;
+        localStorage.setItem('cbom_github_installation_id', instId);
+        setIsIngestionOpen(true);
+        fetchGitHubRepositories(instId).catch(() => {});
+      }
+    };
+    window.addEventListener('message', handleMessage);
+
     // Detect if backend server restarted; if so, clear localStorage automatically
     import('./api/client').then(({ api }) => {
       api.getGitHubInstallUrl()
@@ -55,6 +77,8 @@ export function App() {
       setIsIngestionOpen(true);
       fetchGitHubRepositories(installationId).catch(() => {});
     }
+
+    return () => window.removeEventListener('message', handleMessage);
   }, []);
 
   return (

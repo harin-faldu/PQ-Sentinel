@@ -309,7 +309,15 @@ export function IngestionModal({ isOpen, onClose, onStartLocal, onFetchGitHubRep
                         try {
                           const res = await api.getGitHubInstallUrl();
                           if (res && res.install_url) {
-                            window.location.href = res.install_url;
+                            const width = 600;
+                            const height = 750;
+                            const left = window.screenX + (window.outerWidth - width) / 2;
+                            const top = window.screenY + (window.outerHeight - height) / 2;
+                            window.open(
+                              res.install_url,
+                              'GitHubAppAuthorization',
+                              `width=${width},height=${height},left=${left},top=${top},status=yes,scrollbars=yes`
+                            );
                           }
                         } catch (err) {
                           setModalError('Failed to load GitHub Install URL: ' + err.message);
@@ -436,7 +444,15 @@ export function IngestionModal({ isOpen, onClose, onStartLocal, onFetchGitHubRep
                         try {
                           const res = await api.getGitHubInstallUrl();
                           if (res && res.install_url) {
-                            window.location.href = res.install_url;
+                            const width = 600;
+                            const height = 750;
+                            const left = window.screenX + (window.outerWidth - width) / 2;
+                            const top = window.screenY + (window.outerHeight - height) / 2;
+                            window.open(
+                              res.install_url,
+                              'GitHubAppAuthorization',
+                              `width=${width},height=${height},left=${left},top=${top},status=yes,scrollbars=yes`
+                            );
                           }
                         } catch (err) {
                           setModalError('Failed to load GitHub Install URL: ' + err.message);

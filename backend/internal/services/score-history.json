@@ -148,5 +148,15 @@
     "medium": 0,
     "safe": 0,
     "timestamp": "2026-08-10T13:00:18.2302487+05:30"
+  },
+  {
+    "scan_id": "scan-1786355097",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-10T15:14:57.5363581+05:30"
   }
 ]

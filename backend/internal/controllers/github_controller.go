@@ -3,6 +3,7 @@ package controllers
 import (
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -135,7 +136,7 @@ func (c *GitHubController) HandleListRepos(w http.ResponseWriter, r *http.Reques
 
 var ServerBootID = fmt.Sprintf("%d", time.Now().UnixNano())
 
-// HandleInstallURL returns the 1-click GitHub App Authorization/Installation URL
+// HandleInstallURL returns Vercel-style target selector URL with state payload
 func (c *GitHubController) HandleInstallURL(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -144,13 +145,17 @@ func (c *GitHubController) HandleInstallURL(w http.ResponseWriter, r *http.Reque
 		appSlug = "quantumvault-cbom-scanner"
 	}
 
-	installURL := fmt.Sprintf("https://github.com/apps/%s/installations/new", appSlug)
-	loginURL := fmt.Sprintf("https://github.com/login?return_to=%%2Fapps%%2F%s%%2Finstallations%%2Fnew", appSlug)
+	statePayload := fmt.Sprintf(`{"from":"/new","timestamp":%d}`, time.Now().Unix())
+	encodedState := base64.URLEncoding.EncodeToString([]byte(statePayload))
+
+	selectTargetURL := fmt.Sprintf("https://github.com/apps/%s/installations/select_target?state=%s", appSlug, encodedState)
+	directInstallURL := fmt.Sprintf("https://github.com/apps/%s/installations/new", appSlug)
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"server_instance_id": ServerBootID,
-		"install_url":        installURL,
-		"login_url":          loginURL,
+		"install_url":        selectTargetURL,
+		"select_target_url":  selectTargetURL,
+		"direct_install_url": directInstallURL,
 		"logout_url":         "https://github.com/logout",
 		"app_slug":           appSlug,
 		"app_configured":     c.appID != "" && c.privateKey != nil,
