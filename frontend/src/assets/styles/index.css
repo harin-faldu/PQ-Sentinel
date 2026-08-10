@@ -28,12 +28,16 @@
   padding: 0;
 }
 
+html, body {
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
 body {
   background-color: var(--bg-dark);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  min-height: 100vh;
-  overflow-x: hidden;
   background-image: 
     radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
     radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.12) 0px, transparent 50%),
@@ -61,6 +65,7 @@ body {
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 10px 20px;
   border-radius: 10px;
@@ -70,6 +75,7 @@ body {
   transition: all 0.2s ease;
   border: none;
   font-family: var(--font-sans);
+  white-space: nowrap;
 }
 
 .btn-primary {
@@ -105,6 +111,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 
 .badge-critical {
@@ -139,13 +146,21 @@ body {
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.825rem;
+  word-break: break-all;
 }
 
-/* Table Design */
+/* Table Design & Responsive Wrapper */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .custom-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+  min-width: 650px;
 }
 
 .custom-table th {
@@ -157,6 +172,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   border-bottom: 1px solid var(--border-card);
+  white-space: nowrap;
 }
 
 .custom-table td {
@@ -168,6 +184,34 @@ body {
 
 .custom-table tr:hover td {
   background: rgba(255, 255, 255, 0.02);
+}
+
+/* Spinner Animations */
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive Grid & Flex Layout Utilities */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+}
+
+.navbar-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 /* Custom Scrollbar */
@@ -184,4 +228,50 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #334155;
+}
+
+/* MEDIA QUERIES FOR ALL SCREEN SIZES & MOBILE DEVICES */
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .navbar-container {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px 16px;
+  }
+
+  .nav-tabs-wrapper {
+    overflow-x: auto;
+    width: 100%;
+    padding-bottom: 4px;
+  }
+
+  .nav-actions-wrapper {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .glass-card {
+    padding: 16px !important;
+  }
+
+  .btn {
+    padding: 8px 14px;
+    font-size: 0.825rem;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    font-size: 14px;
+  }
+  
+  .badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+  }
 }

@@ -30,12 +30,31 @@ export async function fetchApi(endpoint, options = {}) {
 
 export const api = {
   getHealth: () => fetchApi('/health'),
+  
+  // Scans
   getScans: () => fetchApi('/scans'),
   getScanDetail: (id) => fetchApi(`/scans/${id}`),
   triggerScan: (targetDirectory) => fetchApi('/scans', {
     method: 'POST',
     body: JSON.stringify({ target_directory: targetDirectory }),
   }),
+  triggerScanByTarget: (targetId) => fetchApi(`/targets/${targetId}/scan`, {
+    method: 'POST',
+  }),
+
+  // Targets
+  getTargets: () => fetchApi('/targets'),
+  createTarget: (targetData) => fetchApi('/targets', {
+    method: 'POST',
+    body: JSON.stringify(targetData),
+  }),
+  getTargetScans: (targetId) => fetchApi(`/targets/${targetId}/scans`),
+
+  // GitHub App Integration
+  getGitHubRepos: (installationId) => fetchApi(`/github/repos?installation_id=${installationId}`),
+
+  // Migration Plan & CycloneDX Export
   getMigrationPlan: (scanId) => fetchApi(`/scans/${scanId}/migration`),
-  getCycloneDXUrl: (scanId) => `${API_BASE}/scans/${scanId}/cyclonedx`,
+  getCycloneDXJsonUrl: (scanId) => `${API_BASE}/scans/${scanId}/cyclonedx`,
+  getCycloneDXXmlUrl: (scanId) => `${API_BASE}/scans/${scanId}/cyclonedx?format=xml`,
 };

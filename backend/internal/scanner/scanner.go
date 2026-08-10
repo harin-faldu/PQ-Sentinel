@@ -20,6 +20,7 @@ type Scanner struct {
 	tlsScanner       *TLSScanner
 	kmsScanner       *AWSKMSScanner
 	containerScanner *ContainerScanner
+	symbolGraph      *SymbolGraph
 }
 
 func NewScanner() *Scanner {
@@ -44,6 +45,7 @@ func NewScanner() *Scanner {
 		tlsScanner:       NewTLSScanner(10 * time.Second),
 		kmsScanner:       NewAWSKMSScanner("us-east-1"),
 		containerScanner: NewContainerScanner(),
+		symbolGraph:      NewSymbolGraph(),
 	}
 }
 
@@ -258,18 +260,34 @@ func (s *Scanner) parseCodeFile(path string, targetDir string, scanID string) []
 		relPath = rel
 	}
 
+	// Parse symbol exports and import call-sites across project files
+	if s.symbolGraph != nil {
+		s.symbolGraph.ParseImportsAndExports(string(content), relPath)
+	}
+
+	var assets []models.CryptoAsset
+
 	// 1. Try Tree-Sitter AST Syntax Tree Parsing (JS, TS, Py, Go, Java)
 	if s.treeSitterParser != nil {
 		if tsAssets, ok := s.treeSitterParser.ParseCodeWithTreeSitter(content, relPath, scanID); ok {
 			for i := range tsAssets {
 				tsAssets[i].BusinessScope, tsAssets[i].ScopeWeight = classifyBusinessScope(relPath)
+				if s.symbolGraph != nil {
+					s.symbolGraph.AttachCallSiteContext(tsAssets[i].Name, &tsAssets[i])
+				}
 			}
 			return tsAssets
 		}
 	}
 
 	// 2. Fallback to line-based AST parser for remaining languages
-	return s.parseCodeFileLineFallback(path, targetDir, scanID, string(content))
+	assets = s.parseCodeFileLineFallback(path, targetDir, scanID, string(content))
+	for i := range assets {
+		if s.symbolGraph != nil {
+			s.symbolGraph.AttachCallSiteContext(assets[i].Name, &assets[i])
+		}
+	}
+	return assets
 }
 
 func (s *Scanner) parseCodeFileLineFallback(path string, targetDir string, scanID string, content string) []models.CryptoAsset {

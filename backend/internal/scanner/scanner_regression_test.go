@@ -191,8 +191,8 @@ public class Demo {
 }
 `,
 			lineAssertions: map[int]string{
-				6: "MD5/SHA-1", // JV-CRYPTO-02 algorithm field is "MD5/SHA-1"
-				7: "RSA",       // JV-CRYPTO-01
+				6: "MD5", // JV-CRYPTO-02-MD5 algorithm is "MD5"
+				7: "RSA", // JV-CRYPTO-01
 			},
 		},
 	}

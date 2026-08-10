@@ -67,14 +67,30 @@ func (c *CBOMController) HandleTargetDetail(w http.ResponseWriter, r *http.Reque
 
 	targetID := parts[0]
 
-	if len(parts) > 1 && parts[1] == "scans" {
-		scans, err := c.service.GetScansByTarget(targetID)
-		if err != nil {
-			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+	if len(parts) > 1 {
+		switch parts[1] {
+		case "scans":
+			scans, err := c.service.GetScansByTarget(targetID)
+			if err != nil {
+				http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+				return
+			}
+			json.NewEncoder(w).Encode(scans)
+			return
+
+		case "scan":
+			if r.Method != http.MethodPost {
+				http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+				return
+			}
+			detail, err := c.service.ExecuteScanByTarget(targetID)
+			if err != nil {
+				http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+				return
+			}
+			json.NewEncoder(w).Encode(detail)
 			return
 		}
-		json.NewEncoder(w).Encode(scans)
-		return
 	}
 
 	target, err := c.service.GetTarget(targetID)

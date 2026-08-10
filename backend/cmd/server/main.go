@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/quantumpq/qv-cbom/internal/controllers"
@@ -29,6 +29,8 @@ func main() {
 	}
 
 	cbomService := services.NewCBOMService(repo)
+	githubController := controllers.NewGitHubController("", nil)
+	cbomService.SetGitHubAppCredentials(githubController.GetAppID(), githubController.GetPrivateKey())
 	cbomController := controllers.NewCBOMController(cbomService)
 
 	mux := http.NewServeMux()
@@ -39,13 +41,24 @@ func main() {
 	mux.HandleFunc("/api/v1/targets/", cbomController.HandleTargetDetail)
 	mux.HandleFunc("/api/v1/scans", cbomController.HandleScans)
 	mux.HandleFunc("/api/v1/scans/", cbomController.HandleScanDetail)
+	mux.HandleFunc("/api/v1/github/repos", githubController.HandleListRepos)
 
 	// Apply Middlewares: CORS -> Logger -> Recovery -> Handler
 	handler := middleware.CORS(middleware.Logger(middleware.Recovery(mux)))
 
-	serverAddr := fmt.Sprintf(":%s", cfg.Port)
-	log.Printf("QuantumVault CBOM API Server running at http://localhost%s", serverAddr)
-	if err := http.ListenAndServe(serverAddr, handler); err != nil {
+	port := cfg.Port
+	listener, err := net.Listen("tcp", ":"+port)
+	if err != nil && port == "8080" {
+		log.Printf("Notice: Port 8080 is occupied by another process. Fallback binding to port 8081...")
+		port = "8081"
+		listener, err = net.Listen("tcp", ":"+port)
+	}
+	if err != nil {
+		log.Fatalf("Server shutdown error: %v", err)
+	}
+
+	log.Printf("QuantumVault CBOM API Server running at http://localhost:%s", port)
+	if err := http.Serve(listener, handler); err != nil {
 		log.Fatalf("Server shutdown error: %v", err)
 	}
 }

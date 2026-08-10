@@ -1,25 +1,44 @@
 package services
 
 import (
+	"crypto/rsa"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/quantumpq/qv-cbom/internal/github"
 	"github.com/quantumpq/qv-cbom/internal/models"
 	"github.com/quantumpq/qv-cbom/internal/repository"
 	"github.com/quantumpq/qv-cbom/internal/risk"
 	"github.com/quantumpq/qv-cbom/internal/scanner"
 )
 
+var purlInvalidCharsRegex = regexp.MustCompile(`[^a-z0-9\.\-\_]`)
+
+func sanitizePURLString(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = filepath.Base(s)
+	s = purlInvalidCharsRegex.ReplaceAllString(s, "-")
+	s = strings.Trim(s, "-")
+	if s == "" {
+		s = "application"
+	}
+	return s
+}
+
 const scoreHistoryFile = "score-history.json"
 
 type CBOMService struct {
-	repo       repository.CBOMRepository
-	scanner    *scanner.Scanner
-	riskEngine *risk.RiskEngine
+	repo             repository.CBOMRepository
+	scanner          *scanner.Scanner
+	riskEngine       *risk.RiskEngine
+	githubAppID      string
+	githubPrivateKey *rsa.PrivateKey
 }
 
 func NewCBOMService(repo repository.CBOMRepository) *CBOMService {
@@ -28,6 +47,11 @@ func NewCBOMService(repo repository.CBOMRepository) *CBOMService {
 		scanner:    scanner.NewScanner(),
 		riskEngine: risk.NewRiskEngine(),
 	}
+}
+
+func (s *CBOMService) SetGitHubAppCredentials(appID string, privateKey *rsa.PrivateKey) {
+	s.githubAppID = appID
+	s.githubPrivateKey = privateKey
 }
 
 func (s *CBOMService) CreateTarget(target models.Target) (*models.Target, error) {
@@ -61,22 +85,80 @@ func (s *CBOMService) ExecuteScanByTarget(targetID string) (*models.ScanDetail, 
 		return nil, fmt.Errorf("unknown target: %w", err)
 	}
 
+	var headSHA string
+
+	// Early Skip Check for GitHub Repositories (Unchanged remote HEAD commit)
+	if target.Type == models.TargetTypeGitHubRepo {
+		appJWT, err := github.GenerateAppJWT(s.githubAppID, s.githubPrivateKey)
+		if err == nil {
+			tokenResp, err := github.GetInstallationToken(appJWT, target.InstallationID)
+			if err == nil && tokenResp != nil {
+				branch := target.DefaultBranch
+				if branch == "" {
+					branch = "main"
+				}
+				headSHA, err = github.GetRemoteHeadSHA(tokenResp.Token, target.FullName, branch)
+				if err == nil && headSHA != "" && target.LastScannedSHA != "" && headSHA == target.LastScannedSHA {
+					existingDetail, err := s.repo.GetLatestScanByTargetID(target.ID)
+					if err == nil && existingDetail != nil {
+						existingDetail.Summary.Notice = fmt.Sprintf("Repository commit unchanged (SHA: %s). Scan skipped.", headSHA)
+						return existingDetail, nil
+					}
+				}
+			}
+		}
+	}
+
 	scanID := fmt.Sprintf("scan-%d", time.Now().Unix())
 	startTime := time.Now()
 
 	var assets []models.CryptoAsset
-	var scannedFiles, totalFiles int
+	var totalFiles, scannedFiles int
 
 	switch target.Type {
 	case models.TargetTypeRepo:
+		// MODE 1: LOCAL DIRECTORY CODEBASE SCANNING
 		assets, totalFiles, scannedFiles, err = s.scanner.ScanDirectory(target.Location, scanID)
 		if err != nil {
 			return nil, fmt.Errorf("directory scan failed: %w", err)
 		}
+
+	case models.TargetTypeGitHubRepo:
+		// MODE 2: REMOTE GITHUB REPOSITORY SCANNING VIA GITHUB APP
+		appJWT, err := github.GenerateAppJWT(s.githubAppID, s.githubPrivateKey)
+		if err != nil {
+			return nil, fmt.Errorf("github auth failed: %w", err)
+		}
+		tokenResp, err := github.GetInstallationToken(appJWT, target.InstallationID)
+		if err != nil {
+			return nil, fmt.Errorf("github token exchange failed: %w", err)
+		}
+
+		branch := target.DefaultBranch
+		if branch == "" {
+			branch = "main"
+		}
+
+		tempDir, err := os.MkdirTemp("", "gh-scan-*")
+		if err != nil {
+			return nil, fmt.Errorf("failed to create temp workspace: %w", err)
+		}
+		defer os.RemoveAll(tempDir)
+
+		if err := github.CloneRepository(tokenResp.Token, target.FullName, branch, tempDir); err != nil {
+			return nil, fmt.Errorf("github clone failed: %w", err)
+		}
+
+		assets, totalFiles, scannedFiles, err = s.scanner.ScanDirectory(tempDir, scanID)
+		if err != nil {
+			return nil, fmt.Errorf("github directory scan failed: %w", err)
+		}
+
 	case models.TargetTypeHost:
 		assets = s.scanner.ScanTLSEndpoints([]string{target.Location}, scanID)
 		totalFiles = 1
 		scannedFiles = 1
+
 	default:
 		// Fallback to directory scan
 		assets, totalFiles, scannedFiles, err = s.scanner.ScanDirectory(target.Location, scanID)
@@ -85,8 +167,16 @@ func (s *CBOMService) ExecuteScanByTarget(targetID string) (*models.ScanDetail, 
 		}
 	}
 
-	pqcScore, critical, high, medium, safe := s.riskEngine.CalculatePQCScore(assets)
+	if target.Type == models.TargetTypeGitHubRepo && headSHA != "" {
+		_ = s.repo.UpdateTargetLastScannedSHA(target.ID, headSHA)
+	}
 
+	return s.saveScanResults(target, scanID, assets, totalFiles, scannedFiles, startTime)
+}
+
+// Extracted shared helper method to compute PQC risk score, populate summary metrics, persist scan summary, migration plan & score history
+func (s *CBOMService) saveScanResults(target *models.Target, scanID string, assets []models.CryptoAsset, totalFiles, scannedFiles int, startTime time.Time) (*models.ScanDetail, error) {
+	pqcScore, critical, high, medium, safe := s.riskEngine.CalculatePQCScore(assets)
 	summary := models.ScanSummary{
 		ID:              scanID,
 		TargetID:        target.ID,
@@ -110,7 +200,6 @@ func (s *CBOMService) ExecuteScanByTarget(targetID string) (*models.ScanDetail, 
 
 	plan := s.riskEngine.GenerateMigrationPlan(scanID, assets)
 	_ = s.repo.SaveMigrationPlan(plan)
-
 	s.trackScoreHistory(summary)
 
 	return &models.ScanDetail{
@@ -255,7 +344,8 @@ func (s *CBOMService) GenerateCycloneDX(scanID string) (*models.CycloneDXCBOM, e
 		return nil, err
 	}
 
-	appRef := fmt.Sprintf("pkg:application/%s@1.0.0", detail.Summary.TargetDirectory)
+	cleanAppTarget := sanitizePURLString(detail.Summary.TargetDirectory)
+	appRef := fmt.Sprintf("pkg:application/%s@1.0.0", cleanAppTarget)
 	var components []models.CycloneDXComponent
 	var cryptoRefs []string
 	nowISO := time.Now().Format(time.RFC3339)
@@ -265,8 +355,9 @@ func (s *CBOMService) GenerateCycloneDX(scanID string) (*models.CycloneDXCBOM, e
 		if a.KeySize == 0 {
 			keySizeStr = "unspecified"
 		}
-		// Valid generic PURL format per spec: pkg:generic/algo@keysize
-		purl := fmt.Sprintf("pkg:generic/%s@%s", strings.ToLower(a.Algorithm), keySizeStr)
+		// Valid generic PURL format per spec: pkg:generic/algo@keysize with slash sanitization
+		cleanAlgoPURL := sanitizePURLString(a.Algorithm)
+		purl := fmt.Sprintf("pkg:generic/%s@%s", cleanAlgoPURL, keySizeStr)
 		cryptoRefs = append(cryptoRefs, purl)
 
 		nistLevel := 0

@@ -1,0 +1,18 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation Template for AWS KMS Key Discovery & Drift Testing'
+
+Resources:
+  PaymentKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS Key for Payment Tokenization
+      Enabled: true
+      EnableKeyRotation: false
+      KeySpec: RSA_2048
+      KeyUsage: SIGN_VERIFY
+
+  PaymentKMSAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/payment-key
+      TargetKeyId: !Ref PaymentKMSKey

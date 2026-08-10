@@ -83,14 +83,19 @@ const (
 	TargetTypeRepo         TargetType = "REPO"
 	TargetTypeHost         TargetType = "HOST"
 	TargetTypeCloudAccount TargetType = "CLOUD_ACCOUNT"
+	TargetTypeGitHubRepo   TargetType = "GITHUB_REPO"
 )
 
 type Target struct {
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	Type      TargetType `json:"type"`
-	Location  string     `json:"location"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	Type           TargetType `json:"type"`
+	Location       string     `json:"location"`
+	InstallationID int64      `json:"installation_id,omitempty"`
+	FullName       string     `json:"full_name,omitempty"`
+	DefaultBranch  string     `json:"default_branch,omitempty"`
+	LastScannedSHA string     `json:"last_scanned_sha,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 // ScanSummary represents the metadata of a CBOM scan run
@@ -108,6 +113,7 @@ type ScanSummary struct {
 	PQCScore        int       `json:"pqc_score"`      // 0-100 score indicating quantum readiness
 	CNSA20Score     int       `json:"cnsa_2_0_score"` // 0-100 score for NSA CNSA 2.0 readiness
 	Status          string    `json:"status"`         // COMPLETED, SCANNING, FAILED
+	Notice          string    `json:"notice,omitempty"`
 	DurationMs      int64     `json:"duration_ms"`
 	CreatedAt       time.Time `json:"created_at"`
 }

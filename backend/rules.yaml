@@ -205,14 +205,25 @@ source_code_rules:
     pqc_status: "VULNERABLE"
     pqc_replacement: "BouncyCastle PQC Provider (Kyber/Dilithium)"
 
-  - id: "JV-CRYPTO-02"
-    name: "Java MessageDigest MD5/SHA1"
-    pattern: "MessageDigest\\.getInstance\\s*\\(\\s*['\"](MD5|SHA-1|SHA1)['\"]"
+  - id: "JV-CRYPTO-02-MD5"
+    name: "Java MessageDigest MD5"
+    pattern: "MessageDigest\\.getInstance\\s*\\(\\s*['\"]MD5['\"]"
     languages: ["java"]
-    algorithm: "MD5/SHA-1"
+    algorithm: "MD5"
+    key_size: 0
+    risk_level: "CRITICAL"
+    risk_rationale: "Legacy Java MessageDigest weak MD5 hashing."
+    pqc_status: "VULNERABLE"
+    pqc_replacement: "MessageDigest.getInstance(\"SHA-256\")"
+
+  - id: "JV-CRYPTO-02-SHA1"
+    name: "Java MessageDigest SHA1"
+    pattern: "MessageDigest\\.getInstance\\s*\\(\\s*['\"](SHA-1|SHA1)['\"]"
+    languages: ["java"]
+    algorithm: "SHA-1"
     key_size: 0
     risk_level: "HIGH"
-    risk_rationale: "Legacy Java MessageDigest weak hashing."
+    risk_rationale: "Legacy Java MessageDigest weak SHA-1 hashing."
     pqc_status: "VULNERABLE"
     pqc_replacement: "MessageDigest.getInstance(\"SHA-256\")"
 

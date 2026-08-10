@@ -44,12 +44,12 @@ func TestCycloneDXSpecCompliance(t *testing.T) {
 			KeySize:   768,
 		},
 		{
-			ID:        "asset-aes",
+			ID:        "asset-compound",
 			ScanID:    scanID,
-			Name:      "AES Cipher",
+			Name:      "Compound Legacy Hash",
 			AssetType: models.AssetAlgorithm,
-			Algorithm: "AES-256-GCM",
-			KeySize:   256,
+			Algorithm: "MD5/SHA-1",
+			KeySize:   0,
 		},
 	}
 
