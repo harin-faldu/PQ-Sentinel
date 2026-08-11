@@ -563,7 +563,12 @@ func (r *MySQLRepository) CreateTarget(t models.Target) error {
 	if t.CreatedAt.IsZero() {
 		t.CreatedAt = time.Now()
 	}
-	query := `INSERT INTO targets (id, name, type, location, installation_id, full_name, default_branch, last_scanned_sha, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	query := `INSERT INTO targets (id, name, type, location, installation_id, full_name, default_branch, last_scanned_sha, created_at)
+	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	          ON DUPLICATE KEY UPDATE
+	          installation_id = IF(VALUES(installation_id) IS NOT NULL, VALUES(installation_id), installation_id),
+	          default_branch = VALUES(default_branch),
+	          full_name = VALUES(full_name)`
 	var instID sql.NullInt64
 	if t.InstallationID > 0 {
 		instID.Int64 = t.InstallationID

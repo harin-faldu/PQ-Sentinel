@@ -127,11 +127,14 @@ func (ss *SecretScanner) ScanSecrets(targetDir string) ([]models.CryptoAsset, er
 			return nil
 		}
 
-		// Ignore virtualenvs, pycache, node_modules, build output
-		if strings.Contains(path, "node_modules") || strings.Contains(path, "vendor") ||
-			strings.Contains(path, "dist") || strings.Contains(path, "__pycache__") ||
-			strings.Contains(path, ".venv") || strings.Contains(path, "venv") ||
-			strings.Contains(path, ".pytest_cache") {
+		// Ignore .git VCS directory, packages, virtualenvs, pycache, node_modules, build/bin/obj outputs
+		lowerPath := strings.ToLower(path)
+		if strings.Contains(lowerPath, ".git") || strings.Contains(lowerPath, "node_modules") ||
+			strings.Contains(lowerPath, "packages") || strings.Contains(lowerPath, "vendor") ||
+			strings.Contains(lowerPath, "dist") || strings.Contains(lowerPath, "build") ||
+			strings.Contains(lowerPath, "bin") || strings.Contains(lowerPath, "obj") ||
+			strings.Contains(lowerPath, "__pycache__") || strings.Contains(lowerPath, ".venv") ||
+			strings.Contains(lowerPath, "venv") || strings.Contains(lowerPath, ".pytest_cache") {
 			return nil
 		}
 
@@ -242,8 +245,13 @@ func (ss *SecretScanner) ScanSecrets(targetDir string) ([]models.CryptoAsset, er
 			// Extract pure secret tokens (alphanumeric with _, -, =) to avoid code syntax false positives
 			candidateRegex := regexp.MustCompile(`[a-zA-Z0-9_\-=]{32,}`)
 			for _, token := range candidateRegex.FindAllString(line, -1) {
-				// Skip URLs, common imports/keywords, or repeating string patterns
-				if strings.HasPrefix(token, "http") || strings.HasPrefix(token, "https") || strings.Contains(token, "import") {
+				// Skip URLs, git remote configs, common imports/keywords, XML/ResX schemas, base64 data, or PublicKeyToken identifiers
+				if strings.HasPrefix(token, "http") || strings.HasPrefix(token, "https") ||
+					strings.Contains(token, "import") || strings.Contains(line, "url =") ||
+					strings.Contains(line, "fetch =") || strings.HasSuffix(relPath, "config") ||
+					ext == ".resx" || ext == ".resources" ||
+					strings.Contains(line, "PublicKeyToken") || strings.Contains(line, "mimetype=") ||
+					strings.Contains(line, "base64") || strings.Contains(line, "ResXResource") {
 					continue
 				}
 
@@ -305,6 +313,8 @@ func isBinaryExt(ext string) bool {
 		".tar": true, ".gz": true, ".pdf": true, ".woff": true, ".ttf": true,
 		".pyc": true, ".pyo": true, ".class": true, ".o": true, ".obj": true,
 		".sqlite": true, ".db": true, ".wasm": true, ".bin": true,
+		".resx": true, ".resources": true, ".nupkg": true, ".p7s": true,
+		".pack": true, ".idx": true, ".rev": true, ".sample": true,
 	}
 	return binaries[ext]
 }

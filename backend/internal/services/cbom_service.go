@@ -125,13 +125,33 @@ func (s *CBOMService) ExecuteScanByTarget(targetID string) (*models.ScanDetail, 
 
 	case models.TargetTypeGitHubRepo:
 		// MODE 2: REMOTE GITHUB REPOSITORY SCANNING VIA GITHUB APP
+		if s.githubAppID == "" || s.githubPrivateKey == nil {
+			return nil, fmt.Errorf("GitHub App credentials not configured on server. Please check GITHUB_APP_ID and GITHUB_PRIVATE_KEY_PATH in .env")
+		}
+
+		// Auto-recover installation_id if target was created before GitHub App authorization
+		if target.InstallationID <= 0 {
+			if allTargets, err := s.repo.ListTargets(); err == nil {
+				for _, t := range allTargets {
+					if t.InstallationID > 0 {
+						target.InstallationID = t.InstallationID
+						break
+					}
+				}
+			}
+		}
+
+		if target.InstallationID <= 0 {
+			return nil, fmt.Errorf("missing or invalid GitHub Installation ID for target '%s'. Please click 'Install App on GitHub' to authorize access", target.Name)
+		}
+
 		appJWT, err := github.GenerateAppJWT(s.githubAppID, s.githubPrivateKey)
 		if err != nil {
-			return nil, fmt.Errorf("github auth failed: %w", err)
+			return nil, fmt.Errorf("github app JWT generation failed: %w", err)
 		}
 		tokenResp, err := github.GetInstallationToken(appJWT, target.InstallationID)
 		if err != nil {
-			return nil, fmt.Errorf("github token exchange failed: %w", err)
+			return nil, fmt.Errorf("github installation token exchange failed (Installation ID %d may be revoked/expired): %w", target.InstallationID, err)
 		}
 
 		branch := target.DefaultBranch

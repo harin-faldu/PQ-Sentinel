@@ -122,6 +122,7 @@ func (s *Scanner) ScanDirectory(targetDir string, scanID string) ([]models.Crypt
 			name := strings.ToLower(info.Name())
 			if name == ".git" || name == "node_modules" || name == "vendor" ||
 				name == "bin" || name == "dist" || name == "build" ||
+				name == "packages" || name == "obj" ||
 				name == "__pycache__" || name == "venv" || name == ".venv" ||
 				name == ".pytest_cache" {
 				return filepath.SkipDir

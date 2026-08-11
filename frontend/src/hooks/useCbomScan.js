@@ -96,12 +96,15 @@ export function useCbomScan() {
       setScanning(true);
       setError(null);
 
+      const activeInstId = installationId || localStorage.getItem('cbom_github_installation_id') || '0';
+      const parsedInstId = parseInt(activeInstId, 10);
+
       // Create GitHub target
       const newTarget = await api.createTarget({
         name: repo.name || repo.full_name,
         type: 'GITHUB_REPO',
         location: repo.full_name,
-        installation_id: parseInt(installationId, 10),
+        installation_id: !isNaN(parsedInstId) && parsedInstId > 0 ? parsedInstId : 0,
         full_name: repo.full_name,
         default_branch: repo.default_branch || 'main',
       });
