@@ -118,6 +118,7 @@ func (ts *TLSScanner) ScanTLSEndpoint(target string) ([]models.CryptoAsset, erro
 	assets = append(assets, models.CryptoAsset{
 		ID:             models.GenerateUUID(),
 		Name:           "Active TLS Endpoint: " + target,
+		AssetType:      models.AssetProtocol,
 		Type:           models.AssetProtocol,
 		Algorithm:      tlsVerName + " / " + cipherName,
 		KeySize:        256,
@@ -162,6 +163,7 @@ func processCertificate(cert *x509.Certificate, target string, index int) models
 	return models.CryptoAsset{
 		ID:             models.GenerateUUID(),
 		Name:           certName,
+		AssetType:      models.AssetCertificate,
 		Type:           models.AssetCertificate,
 		Algorithm:      fmt.Sprintf("%s-%d", keyAlgo, keySize),
 		KeySize:        keySize,

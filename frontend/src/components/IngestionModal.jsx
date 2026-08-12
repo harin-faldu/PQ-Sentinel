@@ -6,6 +6,7 @@ export function IngestionModal({ isOpen, onClose, onStartLocal, onFetchGitHubRep
   const [activeTab, setActiveTab] = useState('local'); // 'local' | 'github'
   const [localPath, setLocalPath] = useState('sample_target');
   const [targetName, setTargetName] = useState('');
+  const [tlsTargets, setTlsTargets] = useState('');
 
   // GitHub App state
   const [installationId, setInstallationId] = useState(() => localStorage.getItem('cbom_github_installation_id') || '');
@@ -35,7 +36,8 @@ export function IngestionModal({ isOpen, onClose, onStartLocal, onFetchGitHubRep
     e.preventDefault();
     if (!localPath) return;
     try {
-      await onStartLocal(localPath, targetName || localPath);
+      const tlsList = tlsTargets.split(',').map(t => t.trim()).filter(Boolean);
+      await onStartLocal(localPath, targetName || localPath, tlsList);
       onClose();
     } catch (err) {
       // Error handled in parent hook
@@ -201,7 +203,7 @@ export function IngestionModal({ isOpen, onClose, onStartLocal, onFetchGitHubRep
                 </span>
               </div>
 
-              <div style={{ marginBottom: '24px' }}>
+              <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#cbd5e1', marginBottom: '6px' }}>
                   Target Display Name (Optional)
                 </label>
@@ -221,6 +223,31 @@ export function IngestionModal({ isOpen, onClose, onStartLocal, onFetchGitHubRep
                     outline: 'none',
                   }}
                 />
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#cbd5e1', marginBottom: '6px' }}>
+                  Live Hosts to Scan (Optional, comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={tlsTargets}
+                  onChange={(e) => setTlsTargets(e.target.value)}
+                  placeholder="e.g. api.example.com:443, db.example.com:8443"
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    backgroundColor: '#1e293b',
+                    color: '#f8fafc',
+                    fontSize: '14px',
+                    outline: 'none',
+                  }}
+                />
+                <span style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                  Live TLS/network endpoints to check cipher strength and cert expiry
+                </span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>

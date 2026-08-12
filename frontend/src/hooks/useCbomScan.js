@@ -47,7 +47,7 @@ export function useCbomScan() {
     }
   };
 
-  const startLocalScan = async (targetPath, name = 'Local Codebase') => {
+  const startLocalScan = async (targetPath, name = 'Local Codebase', tlsTargets = []) => {
     try {
       setScanning(true);
       setError(null);
@@ -59,8 +59,8 @@ export function useCbomScan() {
         location: targetPath,
       });
 
-      // Execute scan by target
-      const detail = await api.triggerScanByTarget(newTarget.id);
+      // Execute scan by target, optionally with TLS targets
+      const detail = await api.triggerScanByTarget(newTarget.id, tlsTargets);
       setCurrentScan(detail);
       await loadScansAndTargets();
       return detail;

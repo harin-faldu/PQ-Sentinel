@@ -108,6 +108,7 @@ func (tsp *TreeSitterParser) walkASTNode(node *sitter.Node, source []byte, relPa
 								ID:             models.GenerateUUID(),
 								ScanID:         scanID,
 								Name:           rule.Name,
+								AssetType:      models.AssetAlgorithm,
 								Type:           models.AssetAlgorithm,
 								Location:       relPath,
 								LineNumber:     lineNo,

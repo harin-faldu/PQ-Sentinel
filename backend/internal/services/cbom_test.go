@@ -110,7 +110,7 @@ func TestCycloneDXSpecCompliance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateCycloneDXXML failed: %v", err)
 	}
-	if !strings.Contains(xmlStr, "<?xml version=\"1.0\"") || !strings.Contains(xmlStr, "<CycloneDXCBOM>") {
+	if !strings.Contains(xmlStr, "<?xml version=\"1.0\"") || !strings.Contains(xmlStr, "<bom") {
 		t.Errorf("Invalid CycloneDX XML export string format")
 	}
 }

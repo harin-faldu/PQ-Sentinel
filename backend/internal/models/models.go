@@ -2,6 +2,7 @@ package models
 
 import (
 	"crypto/rand"
+	"encoding/xml"
 	"fmt"
 	"time"
 )
@@ -68,6 +69,19 @@ type CryptoAsset struct {
 	Details          string    `json:"details"` // Context snippet or extra metadata
 	CreatedAt        time.Time `json:"created_at"`
 	DiscoveredAt     time.Time `json:"discovered_at"`
+}
+
+// Normalize ensures both AssetType and Type are synchronized and non-empty
+func (a *CryptoAsset) Normalize() {
+	if a.AssetType == "" && a.Type != "" {
+		a.AssetType = a.Type
+	} else if a.Type == "" && a.AssetType != "" {
+		a.Type = a.AssetType
+	}
+	if a.AssetType == "" {
+		a.AssetType = AssetAlgorithm
+		a.Type = AssetAlgorithm
+	}
 }
 
 // GenerateUUID generates a quick pseudo-random UUID string for assets
@@ -150,51 +164,53 @@ type MigrationPlan struct {
 
 // CycloneDX 1.6 CBOM standard format export structures
 type CycloneDXCBOM struct {
-	BOMFormat    string                 `json:"bomFormat"`
-	SpecVersion  string                 `json:"specVersion"`
-	SerialNumber string                 `json:"serialNumber"`
-	Version      int                    `json:"version"`
-	Metadata     CycloneDXMetadata      `json:"metadata"`
-	Components   []CycloneDXComponent   `json:"components"`
-	Dependencies []CycloneDXDependency `json:"dependencies"`
+	XMLName      xml.Name               `xml:"bom" json:"-"`
+	XMLNS        string                 `xml:"xmlns,attr" json:"-"`
+	BOMFormat    string                 `xml:"-" json:"bomFormat"`
+	SpecVersion  string                 `xml:"specVersion,attr,omitempty" json:"specVersion"`
+	SerialNumber string                 `xml:"serialNumber,attr,omitempty" json:"serialNumber"`
+	Version      int                    `xml:"version,attr,omitempty" json:"version"`
+	Metadata     CycloneDXMetadata      `xml:"metadata" json:"metadata"`
+	Components   []CycloneDXComponent   `xml:"components>component" json:"components"`
+	Dependencies []CycloneDXDependency `xml:"dependencies>dependency,omitempty" json:"dependencies,omitempty"`
 }
 
 type CycloneDXMetadata struct {
-	Timestamp string               `json:"timestamp"`
-	Tools     []CycloneDXTool      `json:"tools"`
-	Component CycloneDXComponent   `json:"component"`
+	Timestamp string               `xml:"timestamp" json:"timestamp"`
+	Tools     []CycloneDXTool      `xml:"tools>tool" json:"tools"`
+	Component CycloneDXComponent   `xml:"component" json:"component"`
 }
 
 type CycloneDXTool struct {
-	Vendor  string `json:"vendor"`
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Vendor  string `xml:"vendor" json:"vendor"`
+	Name    string `xml:"name" json:"name"`
+	Version string `xml:"version" json:"version"`
 }
 
 type CycloneDXComponent struct {
-	Type             string                `json:"type"`
-	Name             string                `json:"name"`
-	Version          string                `json:"version,omitempty"`
-	PURL             string                `json:"purl,omitempty"`
-	EvaluatedAt      string                `json:"evaluatedAt,omitempty"`
-	CryptoProperties *CycloneDXCryptoProps `json:"cryptoProperties,omitempty"`
+	Type             string                `xml:"type,attr" json:"type"`
+	Name             string                `xml:"name" json:"name"`
+	Version          string                `xml:"version,omitempty" json:"version,omitempty"`
+	PURL             string                `xml:"purl,omitempty" json:"purl,omitempty"`
+	EvaluatedAt      string                `xml:"evaluatedAt,omitempty" json:"evaluatedAt,omitempty"`
+	CryptoProperties *CycloneDXCryptoProps `xml:"cryptoProperties,omitempty" json:"cryptoProperties,omitempty"`
 }
 
 type CycloneDXCryptoProps struct {
-	AssetType           string              `json:"assetType"`
-	AlgorithmProperties *CycloneDXAlgoProps `json:"algorithmProperties,omitempty"`
+	AssetType           string              `xml:"assetType" json:"assetType"`
+	AlgorithmProperties *CycloneDXAlgoProps `xml:"algorithmProperties,omitempty" json:"algorithmProperties,omitempty"`
 }
 
 type CycloneDXAlgoProps struct {
-	Primitive                string `json:"primitive"`
-	ParameterSetID           string `json:"parameterSetId,omitempty"`
-	ExecutionEnvironment     string `json:"executionEnvironment,omitempty"`
-	NISTQuantumSecurityLevel int    `json:"nistQuantumSecurityLevel"`
+	Primitive                string `xml:"primitive" json:"primitive"`
+	ParameterSetID           string `xml:"parameterSetId,omitempty" json:"parameterSetId,omitempty"`
+	ExecutionEnvironment     string `xml:"executionEnvironment,omitempty" json:"executionEnvironment,omitempty"`
+	NISTQuantumSecurityLevel int    `xml:"nistQuantumSecurityLevel" json:"nistQuantumSecurityLevel"`
 }
 
 type CycloneDXDependency struct {
-	Ref       string   `json:"ref"`
-	DependsOn []string `json:"dependsOn"`
+	Ref       string   `xml:"ref,attr" json:"ref"`
+	DependsOn []string `xml:"dependency>ref,omitempty" json:"dependsOn,omitempty"`
 }
 
 // ScoreHistoryEntry tracks PQC score over time for trend analysis

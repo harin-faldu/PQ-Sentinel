@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -154,6 +155,7 @@ func (cp *ConfigParser) checkConfigValue(keyPath string, value string, relPath s
 			ID:             models.GenerateUUID(),
 			ScanID:         scanID,
 			Name:           fmt.Sprintf("Config: %s = \"%s\"", keyPath, value),
+			AssetType:      models.AssetAlgorithm,
 			Type:           models.AssetAlgorithm,
 			Location:       relPath,
 			LineNumber:     0,
@@ -167,6 +169,13 @@ func (cp *ConfigParser) checkConfigValue(keyPath string, value string, relPath s
 			ContextSnippet: fmt.Sprintf("%s: %s", keyPath, value),
 			DiscoveredAt:   time.Now(),
 		})
+	}
+
+	// Check RSA key size parameters (handle as string)
+	if (strings.Contains(lowerKey, "keysize") || strings.Contains(lowerKey, "key_length") || strings.Contains(lowerKey, "bits")) {
+		if valInt, err := strconv.Atoi(lowerVal); err == nil && valInt > 0 {
+			cp.checkConfigKeySize(keyPath, valInt, relPath, scanID, assets)
+		}
 	}
 }
 
@@ -207,6 +216,7 @@ func (cp *ConfigParser) checkConfigKeySize(keyPath string, value int, relPath st
 		ID:             models.GenerateUUID(),
 		ScanID:         scanID,
 		Name:           fmt.Sprintf("Config: Weak Key Size (%d bits)", value),
+		AssetType:      models.AssetAlgorithm,
 		Type:           models.AssetAlgorithm,
 		Location:       relPath,
 		LineNumber:     0,

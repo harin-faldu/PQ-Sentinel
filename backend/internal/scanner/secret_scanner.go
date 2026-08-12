@@ -142,6 +142,14 @@ func (ss *SecretScanner) ScanSecrets(targetDir string) ([]models.CryptoAsset, er
 		baseName := strings.ToLower(info.Name())
 		ext := strings.ToLower(filepath.Ext(path))
 
+		// Ignore dependency checksum lockfiles (go.sum, package-lock.json, yarn.lock, etc.)
+		if baseName == "go.sum" || baseName == "package-lock.json" ||
+			baseName == "yarn.lock" || baseName == "pnpm-lock.yaml" ||
+			baseName == "cargo.lock" || baseName == "composer.lock" ||
+			baseName == "poetry.lock" || baseName == "pipfile.lock" {
+			return nil
+		}
+
 		// Check .env files explicitly
 		isDotEnv := strings.HasPrefix(baseName, ".env")
 

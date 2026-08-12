@@ -18,8 +18,9 @@ func NewCBOMController(service *services.CBOMService) *CBOMController {
 }
 
 type ScanRequest struct {
-	TargetID        string `json:"target_id"`
-	TargetDirectory string `json:"target_directory"`
+	TargetID        string   `json:"target_id"`
+	TargetDirectory string   `json:"target_directory"`
+	TLSTargets      []string `json:"tls_targets,omitempty"`
 }
 
 // HandleTargets handles GET /api/v1/targets and POST /api/v1/targets
@@ -83,7 +84,12 @@ func (c *CBOMController) HandleTargetDetail(w http.ResponseWriter, r *http.Reque
 				http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
 				return
 			}
-			detail, err := c.service.ExecuteScanByTarget(targetID)
+			// Parse optional TLS targets from request body
+			var scanReq ScanRequest
+			if r.Body != nil {
+				_ = json.NewDecoder(r.Body).Decode(&scanReq)
+			}
+			detail, err := c.service.ExecuteScanByTargetWithTLS(targetID, scanReq.TLSTargets)
 			if err != nil {
 				http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 				return
@@ -156,11 +162,25 @@ func (c *CBOMController) HandleScanDetail(w http.ResponseWriter, r *http.Request
 
 	// Handle /api/v1/scans/{id}/cyclonedx
 	if len(parts) > 1 && parts[1] == "cyclonedx" {
+		format := r.URL.Query().Get("format")
+		if format == "xml" {
+			xmlStr, err := c.service.GenerateCycloneDXXML(scanID)
+			if err != nil {
+				http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+			w.Header().Set("Content-Disposition", `attachment; filename="cbom-cyclonedx-`+scanID+`.xml"`)
+			w.Write([]byte(xmlStr))
+			return
+		}
+
 		bom, err := c.service.GenerateCycloneDX(scanID)
 		if err != nil {
 			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
 			return
 		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="cbom-cyclonedx-`+scanID+`.json"`)
 		json.NewEncoder(w).Encode(bom)
 		return

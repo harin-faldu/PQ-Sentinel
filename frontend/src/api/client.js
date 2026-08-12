@@ -38,8 +38,9 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ target_directory: targetDirectory }),
   }),
-  triggerScanByTarget: (targetId) => fetchApi(`/targets/${targetId}/scan`, {
+  triggerScanByTarget: (targetId, tlsTargets = []) => fetchApi(`/targets/${targetId}/scan`, {
     method: 'POST',
+    body: JSON.stringify(tlsTargets.length > 0 ? { tls_targets: tlsTargets } : {}),
   }),
 
   // Targets

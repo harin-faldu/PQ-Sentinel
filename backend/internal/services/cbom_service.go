@@ -80,6 +80,10 @@ func (s *CBOMService) GetScansByTarget(targetID string) ([]models.ScanSummary, e
 }
 
 func (s *CBOMService) ExecuteScanByTarget(targetID string) (*models.ScanDetail, error) {
+	return s.ExecuteScanByTargetWithTLS(targetID, nil)
+}
+
+func (s *CBOMService) ExecuteScanByTargetWithTLS(targetID string, tlsTargets []string) (*models.ScanDetail, error) {
 	target, err := s.repo.GetTarget(targetID)
 	if err != nil {
 		return nil, fmt.Errorf("unknown target: %w", err)
@@ -191,11 +195,25 @@ func (s *CBOMService) ExecuteScanByTarget(targetID string) (*models.ScanDetail, 
 		_ = s.repo.UpdateTargetLastScannedSHA(target.ID, headSHA)
 	}
 
+	// TLS endpoint scanning if frontend sent targets
+	if len(tlsTargets) > 0 {
+		var activeTargets []string
+		for _, t := range tlsTargets {
+			discovered := s.scanner.AutoDiscoverTLSEndpoints(t)
+			activeTargets = append(activeTargets, discovered...)
+		}
+		tlsAssets := s.scanner.ScanTLSEndpoints(activeTargets, scanID)
+		assets = append(assets, tlsAssets...)
+	}
+
 	return s.saveScanResults(target, scanID, assets, totalFiles, scannedFiles, startTime)
 }
 
 // Extracted shared helper method to compute PQC risk score, populate summary metrics, persist scan summary, migration plan & score history
 func (s *CBOMService) saveScanResults(target *models.Target, scanID string, assets []models.CryptoAsset, totalFiles, scannedFiles int, startTime time.Time) (*models.ScanDetail, error) {
+	for i := range assets {
+		assets[i].Normalize()
+	}
 	pqcScore, critical, high, medium, safe := s.riskEngine.CalculatePQCScore(assets)
 	summary := models.ScanSummary{
 		ID:              scanID,
@@ -438,6 +456,7 @@ func (s *CBOMService) GenerateCycloneDXXML(scanID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	bom.XMLNS = "http://cyclonedx.org/schema/bom/1.6"
 
 	xmlData, err := xml.MarshalIndent(bom, "", "  ")
 	if err != nil {

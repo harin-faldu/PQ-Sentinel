@@ -13,6 +13,12 @@ export function useRiskMetrics(assets = []) {
     let keyStores = 0;
     let libraries = 0;
 
+    // Scanner-specific breakdown counts
+    let kmsFindings = 0;
+    let containerFindings = 0;
+    let tlsFindings = 0;
+    let secretFindings = 0;
+
     assets.forEach((a) => {
       switch (a.risk_level) {
         case 'CRITICAL':
@@ -41,12 +47,32 @@ export function useRiskMetrics(assets = []) {
           protocols++;
           break;
         case 'KEYSTORE':
+          keyStores++;
+          break;
         case 'SECRET':
+          secretFindings++;
           keyStores++;
           break;
         case 'LIBRARY':
           libraries++;
           break;
+      }
+
+      // Detect scanner origin from name/details patterns
+      const name = (a.name || '').toLowerCase();
+      const details = (a.details || '').toLowerCase();
+      if (name.includes('aws kms') || name.includes('cloudformation aws kms') || details.includes('aws kms')) {
+        kmsFindings++;
+      }
+      if (name.includes('container') || name.includes('dockerfile') || details.includes('dockerfile') || details.includes('syft')) {
+        containerFindings++;
+      }
+      if (name.includes('active tls') || name.includes('tls cert') || name.includes('tls endpoint')) {
+        tlsFindings++;
+      }
+      if (a.asset_type === 'SECRET' || name.includes('leaked') || name.includes('secret') || name.includes('exposed')) {
+        // Only count if not already counted
+        if (a.asset_type !== 'SECRET') secretFindings++;
       }
     });
 
@@ -69,6 +95,13 @@ export function useRiskMetrics(assets = []) {
         keyStores,
         libraries,
       },
+      scannerBreakdown: {
+        kms: kmsFindings,
+        container: containerFindings,
+        tls: tlsFindings,
+        secrets: secretFindings,
+      },
     };
   }, [assets]);
 }
+

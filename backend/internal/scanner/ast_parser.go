@@ -116,6 +116,7 @@ func (p *ASTParser) MatchYAMLRuleAgainstAST(node *ASTNode, rule YAMLRule, scanID
 			ID:             models.GenerateUUID(),
 			ScanID:         scanID,
 			Name:           rule.Name,
+			AssetType:      assetType,
 			Type:           assetType,
 			Location:       relPath,
 			LineNumber:     node.Line,
@@ -143,6 +144,7 @@ func (p *ASTParser) MatchRuleAgainstAST(node *ASTNode, pattern *regexp.Regexp, n
 		return &models.CryptoAsset{
 			ID:             models.GenerateUUID(),
 			Name:           name,
+			AssetType:      models.AssetAlgorithm,
 			Type:           models.AssetAlgorithm,
 			Location:       relPath,
 			LineNumber:     node.Line,

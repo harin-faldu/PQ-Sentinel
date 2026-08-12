@@ -1,16 +1,56 @@
 import React, { useState } from 'react';
-import { Navbar } from './components/Navbar';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useOutletContext, useNavigate } from 'react-router-dom';
+import Sidebar from './components/Sidebar';
+import PageHeader from './components/PageHeader';
+import { CbomHeaderActions } from './components/CbomHeaderActions';
 import { DashboardPage } from './pages/DashboardPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { RiskAnalysisPage } from './pages/RiskAnalysisPage';
 import { MigrationPlannerPage } from './pages/MigrationPlannerPage';
+import { PlaceholderPage } from './pages/PlaceholderPage';
 import { IngestionModal } from './components/IngestionModal';
 import { CycloneDXExportModal } from './components/CycloneDXExportModal';
 import { useCbomScan } from './hooks/useCbomScan';
-import { AlertCircle, CheckCircle2, Info } from 'lucide-react';
+import { useTheme } from './context/ThemeContext';
+import { AlertCircle, Info } from 'lucide-react';
+import './assets/styles/App.css';
 
-export function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+/* ── Main Layout with Sidebar ── */
+const MainLayout = () => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { isDark } = useTheme();
+
+  return (
+    <div className="app">
+      {/* Mobile Header */}
+      <header className="mobile-header">
+        <button
+          className="hamburger-toggle"
+          onClick={() => setIsSidebarOpen(true)}
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <div className="mobile-logo-container">
+          <img
+            src={isDark ? "/3.svg" : "/4.svg"}
+            alt="QuantumVault"
+            className="mobile-logo"
+          />
+        </div>
+      </header>
+
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <main className="main-content">
+        <Outlet />
+      </main>
+    </div>
+  );
+};
+
+/* ── CBOM Layout (wraps CBOM pages with shared scan state, banners, and modals) ── */
+const CbomLayout = () => {
   const [isIngestionOpen, setIsIngestionOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
 
@@ -30,8 +70,8 @@ export function App() {
     setError,
   } = useCbomScan();
 
+  // GitHub App auth postMessage handling
   React.useEffect(() => {
-    // If inside GitHub Authorization popup window, notify opener and close
     if (window.opener && window.opener !== window) {
       const params = new URLSearchParams(window.location.search);
       const instId = params.get('installation_id');
@@ -42,7 +82,6 @@ export function App() {
       }
     }
 
-    // Listen for postMessage from popup window
     const handleMessage = (event) => {
       if (event.data && event.data.type === 'GITHUB_AUTH_SUCCESS' && event.data.installation_id) {
         const instId = event.data.installation_id;
@@ -53,14 +92,13 @@ export function App() {
     };
     window.addEventListener('message', handleMessage);
 
-    // Detect if backend server restarted; if so, clear localStorage automatically
+    // Detect backend restart
     import('./api/client').then(({ api }) => {
       api.getGitHubInstallUrl()
         .then((res) => {
           if (res && res.server_instance_id) {
             const storedServerID = localStorage.getItem('cbom_server_instance_id');
             if (storedServerID && storedServerID !== res.server_instance_id) {
-              console.log('Backend server restart detected. Clearing localStorage...');
               localStorage.clear();
             }
             localStorage.setItem('cbom_server_instance_id', res.server_instance_id);
@@ -81,26 +119,21 @@ export function App() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  return (
-    <div style={{ minHeight: '100vh', paddingBottom: '40px', backgroundColor: '#0f172a', color: '#f8fafc' }}>
-      {/* Navigation Header Bar */}
-      <Navbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        currentScan={currentScan}
-        scans={scans}
-        targets={targets}
-        onSelectScan={selectScan}
-        onOpenIngestion={() => setIsIngestionOpen(true)}
-        onOpenExport={() => setIsExportOpen(true)}
-        scanning={scanning}
-      />
+  const headerActionsProps = {
+    currentScan,
+    scans,
+    onSelectScan: selectScan,
+    onOpenIngestion: () => setIsIngestionOpen(true),
+    onOpenExport: () => setIsExportOpen(true),
+    scanning,
+  };
 
-      {/* Global Error Banner */}
+  return (
+    <div>
+      {/* Error Banner */}
       {error && (
         <div style={{
-          maxWidth: '1400px',
-          margin: '16px auto 0 auto',
+          marginBottom: '16px',
           padding: '12px 20px',
           backgroundColor: 'rgba(239, 68, 68, 0.15)',
           border: '1px solid rgba(239, 68, 68, 0.3)',
@@ -121,16 +154,15 @@ export function App() {
         </div>
       )}
 
-      {/* Scan Notice Banner (e.g. Unchanged Git Commit Skip) */}
+      {/* Notice Banner */}
       {currentScan?.summary?.notice && (
         <div style={{
-          maxWidth: '1400px',
-          margin: '16px auto 0 auto',
+          marginBottom: '16px',
           padding: '12px 20px',
-          backgroundColor: 'rgba(56, 189, 248, 0.15)',
-          border: '1px solid rgba(56, 189, 248, 0.3)',
+          backgroundColor: 'rgba(0, 168, 255, 0.15)',
+          border: '1px solid rgba(0, 168, 255, 0.3)',
           borderRadius: '10px',
-          color: '#7dd3fc',
+          color: 'var(--color-primary)',
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
@@ -141,33 +173,21 @@ export function App() {
         </div>
       )}
 
-      {/* Main Page Content */}
-      <main style={{ maxWidth: '1400px', width: '100%', margin: '20px auto 0 auto', padding: '0 16px' }}>
-        {loading && !currentScan ? (
-          <div className="glass-card" style={{ padding: '60px', textAlign: 'center', color: '#94a3b8' }}>
-            <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#38bdf8' }}>
-              Initializing QuantumVault CBOM Intelligence Engine...
-            </div>
-            <div style={{ fontSize: '13px' }}>
-              Loading cryptographic asset inventories, risk scores, and PQC migration strategies.
-            </div>
+      {/* Page Content */}
+      {loading && !currentScan ? (
+        <div className="card" style={{ padding: '60px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+          <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: 'var(--color-primary)' }}>
+            Initializing CBOM Intelligence Engine...
           </div>
-        ) : (
-          <>
-            {activeTab === 'dashboard' && (
-              <DashboardPage
-                currentScan={currentScan}
-                onNavigateToMigration={() => setActiveTab('migration')}
-              />
-            )}
-            {activeTab === 'inventory' && <InventoryPage currentScan={currentScan} />}
-            {activeTab === 'risk' && <RiskAnalysisPage currentScan={currentScan} />}
-            {activeTab === 'migration' && <MigrationPlannerPage currentScan={currentScan} />}
-          </>
-        )}
-      </main>
+          <div style={{ fontSize: '13px' }}>
+            Loading cryptographic asset inventories, risk scores, and PQC migration strategies.
+          </div>
+        </div>
+      ) : (
+        <Outlet context={{ currentScan, scanning, headerActionsProps }} />
+      )}
 
-      {/* Ingestion Modal (Local Filesystem Directory & GitHub App Repository Picker) */}
+      {/* Modals */}
       <IngestionModal
         isOpen={isIngestionOpen}
         onClose={() => setIsIngestionOpen(false)}
@@ -179,12 +199,117 @@ export function App() {
         scanning={scanning}
       />
 
-      {/* CycloneDX 1.6 Export Modal */}
       <CycloneDXExportModal
         isOpen={isExportOpen}
         onClose={() => setIsExportOpen(false)}
         currentScan={currentScan}
       />
+    </div>
+  );
+};
+
+/* ── App ── */
+export function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route element={<MainLayout />}>
+          {/* Default redirect to CBOM Dashboard */}
+          <Route index element={<Navigate to="/cbom" replace />} />
+
+          {/* QuantaVault placeholder pages */}
+          <Route path="dashboard" element={<PlaceholderPage title="Dashboard" />} />
+          <Route path="pqc-keys" element={<PlaceholderPage title="PQC Keys" />} />
+          <Route path="authentication-keys" element={<PlaceholderPage title="Authentication Keys" />} />
+          <Route path="policies" element={<PlaceholderPage title="Policies" />} />
+          <Route path="audit-logs" element={<PlaceholderPage title="Audit Logs" />} />
+          <Route path="billing" element={<PlaceholderPage title="Billing" />} />
+          <Route path="settings" element={<PlaceholderPage title="Settings" />} />
+
+          {/* Certificate Manager placeholder pages */}
+          <Route path="cert-manager" element={<PlaceholderPage title="Certificate Manager" />} />
+          <Route path="cert-manager/certificates" element={<PlaceholderPage title="Certificates" />} />
+          <Route path="cert-manager/keys" element={<PlaceholderPage title="Cert Keys" />} />
+          <Route path="cert-manager/csr" element={<PlaceholderPage title="Generate CSR" />} />
+          <Route path="cert-manager/internal-ca" element={<PlaceholderPage title="Internal CA" />} />
+          <Route path="cert-manager/audit" element={<PlaceholderPage title="Cert Audit Logs" />} />
+
+          {/* CBOM pages with shared scan state */}
+          <Route path="cbom" element={<CbomLayout />}>
+            <Route index element={<CbomDashboardWrapper />} />
+            <Route path="inventory" element={<CbomInventoryWrapper />} />
+            <Route path="risk" element={<CbomRiskWrapper />} />
+            <Route path="migration" element={<CbomMigrationWrapper />} />
+          </Route>
+        </Route>
+      </Routes>
+    </Router>
+  );
+}
+
+/* ── CBOM Page Wrappers with QuantaVault PageHeader & Page Layout ── */
+
+function CbomDashboardWrapper() {
+  const { currentScan, headerActionsProps } = useOutletContext();
+  const navigate = useNavigate();
+  return (
+    <div className="page">
+      <PageHeader
+        title="CBOM Intelligence"
+        subtitle="Cryptographic Inventory & Post-Quantum Cryptography (PQC) Risk Assessment"
+        action={<CbomHeaderActions {...headerActionsProps} />}
+      />
+      <div className="page-content">
+        <DashboardPage currentScan={currentScan} onNavigateToMigration={() => navigate('/cbom/migration')} />
+      </div>
+    </div>
+  );
+}
+
+function CbomInventoryWrapper() {
+  const { currentScan, headerActionsProps } = useOutletContext();
+  return (
+    <div className="page">
+      <PageHeader
+        title="Asset Inventory"
+        subtitle="Complete inventory of discovered cryptographic algorithms, key lengths, certificates, and libraries"
+        action={<CbomHeaderActions {...headerActionsProps} />}
+      />
+      <div className="page-content">
+        <InventoryPage currentScan={currentScan} />
+      </div>
+    </div>
+  );
+}
+
+function CbomRiskWrapper() {
+  const { currentScan, headerActionsProps } = useOutletContext();
+  return (
+    <div className="page">
+      <PageHeader
+        title="Risk Analysis"
+        subtitle="Quantum vulnerability findings scored against NIST SP 800-131A & CNSA 2.0 standards"
+        action={<CbomHeaderActions {...headerActionsProps} />}
+      />
+      <div className="page-content">
+        <RiskAnalysisPage currentScan={currentScan} />
+      </div>
+    </div>
+  );
+}
+
+function CbomMigrationWrapper() {
+  const { currentScan, headerActionsProps } = useOutletContext();
+  return (
+    <div className="page">
+      <PageHeader
+        title="PQC Migration Strategy"
+        subtitle="NIST PQC standardized replacement algorithms & modernization roadmap"
+        action={<CbomHeaderActions {...headerActionsProps} />}
+      />
+      <div className="page-content">
+        <MigrationPlannerPage currentScan={currentScan} />
+      </div>
     </div>
   );
 }

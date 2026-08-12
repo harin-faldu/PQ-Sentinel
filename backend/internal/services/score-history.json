@@ -158,5 +158,65 @@
     "medium": 0,
     "safe": 0,
     "timestamp": "2026-08-10T15:14:57.5363581+05:30"
+  },
+  {
+    "scan_id": "scan-1786518316",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-12T12:35:16.3730674+05:30"
+  },
+  {
+    "scan_id": "scan-1786518355",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-12T12:35:55.3550252+05:30"
+  },
+  {
+    "scan_id": "scan-1786520874",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-12T13:17:54.6221805+05:30"
+  },
+  {
+    "scan_id": "scan-1786528785",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-12T15:29:45.5481567+05:30"
+  },
+  {
+    "scan_id": "scan-1786529198",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-12T15:36:38.8003741+05:30"
+  },
+  {
+    "scan_id": "scan-1786534220",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-12T17:00:20.6435466+05:30"
   }
 ]
