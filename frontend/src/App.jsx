@@ -70,24 +70,70 @@ const CbomLayout = () => {
     setError,
   } = useCbomScan();
 
-  // GitHub App auth postMessage handling
+  // GitHub App auth postMessage & redirect handling
   React.useEffect(() => {
-    if (window.opener && window.opener !== window) {
-      const params = new URLSearchParams(window.location.search);
-      const instId = params.get('installation_id');
-      if (instId) {
-        window.opener.postMessage({ type: 'GITHUB_AUTH_SUCCESS', installation_id: instId }, '*');
+    const params = new URLSearchParams(window.location.search);
+    const instId = params.get('installation_id');
+
+    // 1. If this window was opened or redirected with installation_id
+    if (instId) {
+      localStorage.setItem('cbom_github_installation_id', instId);
+
+      // Check if running inside a popup window
+      const isPopup = (window.opener && window.opener !== window) ||
+                      window.name === 'GitHubAppAuthorization' ||
+                      (window.outerWidth < 750 && window.outerHeight < 850);
+
+      if (isPopup) {
+        try {
+          if (window.opener) {
+            window.opener.postMessage({ type: 'GITHUB_AUTH_SUCCESS', installation_id: instId }, '*');
+          }
+        } catch (e) {}
+        
+        // Attempt to close popup window
         window.close();
+
+        // If window.close() was blocked by browser, render a clean completion card
+        document.body.innerHTML = `
+          <div style="background:#0f172a;color:#f8fafc;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;text-align:center;padding:20px;">
+            <div style="background:#1e293b;border:1px solid rgba(255,255,255,0.1);padding:32px;border-radius:16px;max-width:400px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">
+              <svg height="48" viewBox="0 0 16 16" width="48" fill="#38bdf8" style="margin-bottom:16px;">
+                <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+              </svg>
+              <h2 style="font-size:20px;font-weight:700;margin:0 0 8px 0;color:#f8fafc;">GitHub App Authorized!</h2>
+              <p style="font-size:14px;color:#94a3b8;margin:0 0 20px 0;line-height:1.4;">Your repositories are now accessible in QuantumVault.</p>
+              <button onclick="window.close()" style="background:#0284c7;color:#ffffff;border:none;padding:12px 24px;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;width:100%;">
+                Close This Window
+              </button>
+            </div>
+          </div>
+        `;
         return;
       }
+
+      // If main window direct redirect
+      window.history.replaceState({}, document.title, window.location.pathname);
+      setIsIngestionOpen(true);
+      fetchGitHubRepositories(instId).catch(() => {});
     }
 
+    // 2. Listen to storage events from popup window
+    const handleStorage = (event) => {
+      if (event.key === 'cbom_github_installation_id' && event.newValue) {
+        setIsIngestionOpen(true);
+        fetchGitHubRepositories(event.newValue).catch(() => {});
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    // 3. Listen to postMessage from popup window
     const handleMessage = (event) => {
       if (event.data && event.data.type === 'GITHUB_AUTH_SUCCESS' && event.data.installation_id) {
-        const instId = event.data.installation_id;
-        localStorage.setItem('cbom_github_installation_id', instId);
+        const id = event.data.installation_id;
+        localStorage.setItem('cbom_github_installation_id', id);
         setIsIngestionOpen(true);
-        fetchGitHubRepositories(instId).catch(() => {});
+        fetchGitHubRepositories(id).catch(() => {});
       }
     };
     window.addEventListener('message', handleMessage);
@@ -99,7 +145,11 @@ const CbomLayout = () => {
           if (res && res.server_instance_id) {
             const storedServerID = localStorage.getItem('cbom_server_instance_id');
             if (storedServerID && storedServerID !== res.server_instance_id) {
+              const savedInstID = localStorage.getItem('cbom_github_installation_id');
               localStorage.clear();
+              if (savedInstID) {
+                localStorage.setItem('cbom_github_installation_id', savedInstID);
+              }
             }
             localStorage.setItem('cbom_server_instance_id', res.server_instance_id);
           }
@@ -107,16 +157,10 @@ const CbomLayout = () => {
         .catch(() => {});
     });
 
-    const params = new URLSearchParams(window.location.search);
-    const installationId = params.get('installation_id');
-    if (installationId) {
-      localStorage.setItem('cbom_github_installation_id', installationId);
-      window.history.replaceState({}, document.title, window.location.pathname);
-      setIsIngestionOpen(true);
-      fetchGitHubRepositories(installationId).catch(() => {});
-    }
-
-    return () => window.removeEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('message', handleMessage);
+    };
   }, []);
 
   const headerActionsProps = {

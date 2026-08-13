@@ -14,21 +14,33 @@ export function IngestionModal({ isOpen, onClose, onStartLocal, onFetchGitHubRep
   const [githubFetched, setGithubFetched] = useState(false);
   const [modalError, setModalError] = useState(null);
 
+  const [manualIdInput, setManualIdInput] = useState('');
+  const [showManualInput, setShowManualInput] = useState(false);
+
   React.useEffect(() => {
-    const savedId = localStorage.getItem('cbom_github_installation_id');
-    const idToUse = savedId || installationId;
-    if (activeTab === 'github' && idToUse && (!githubRepos || githubRepos.length === 0) && !githubFetched && !loadingRepos) {
-      setModalError(null);
-      onFetchGitHubRepos(idToUse)
-        .then(() => setGithubFetched(true))
-        .catch((err) => {
-          setModalError('GitHub Installation token expired or revoked. Please click "Install from GitHub" below.');
-          localStorage.removeItem('cbom_github_installation_id');
-          setInstallationId('');
-          setGithubFetched(true);
-        });
-    }
-  }, [activeTab, installationId, githubRepos, githubFetched, loadingRepos, onFetchGitHubRepos]);
+    if (!isOpen || activeTab !== 'github') return;
+
+    const checkAndFetch = () => {
+      const savedId = localStorage.getItem('cbom_github_installation_id');
+      const idToUse = savedId || installationId;
+      if (idToUse && (!githubRepos || githubRepos.length === 0) && !githubFetched && !loadingRepos) {
+        setModalError(null);
+        setInstallationId(idToUse);
+        onFetchGitHubRepos(idToUse)
+          .then(() => setGithubFetched(true))
+          .catch((err) => {
+            setModalError('GitHub Installation token expired or revoked. Please click "Install from GitHub" below.');
+            localStorage.removeItem('cbom_github_installation_id');
+            setInstallationId('');
+            setGithubFetched(true);
+          });
+      }
+    };
+
+    checkAndFetch();
+    const interval = setInterval(checkAndFetch, 1000);
+    return () => clearInterval(interval);
+  }, [isOpen, activeTab, installationId, githubRepos, githubFetched, loadingRepos, onFetchGitHubRepos]);
 
   if (!isOpen) return null;
 
@@ -520,6 +532,67 @@ export function IngestionModal({ isOpen, onClose, onStartLocal, onFetchGitHubRep
                     >
                       Need to log into a different GitHub account? Log out on GitHub first
                     </a>
+
+                    <div style={{ marginTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px', width: '100%', maxWidth: '380px' }}>
+                      {!showManualInput ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowManualInput(true)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#64748b',
+                            fontSize: '12px',
+                            textDecoration: 'underline',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Already authorized? Enter Installation ID manually
+                        </button>
+                      ) : (
+                        <form onSubmit={(e) => {
+                          e.preventDefault();
+                          if (!manualIdInput.trim()) return;
+                          const cleanId = manualIdInput.trim();
+                          localStorage.setItem('cbom_github_installation_id', cleanId);
+                          setInstallationId(cleanId);
+                          onFetchGitHubRepos(cleanId)
+                            .then(() => setGithubFetched(true))
+                            .catch((err) => setModalError(err.message));
+                        }} style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                          <input
+                            type="text"
+                            value={manualIdInput}
+                            onChange={(e) => setManualIdInput(e.target.value)}
+                            placeholder="e.g. 68239012"
+                            style={{
+                              flex: 1,
+                              padding: '8px 12px',
+                              borderRadius: '6px',
+                              border: '1px solid rgba(255, 255, 255, 0.15)',
+                              backgroundColor: '#1e293b',
+                              color: '#f8fafc',
+                              fontSize: '13px',
+                            }}
+                          />
+                          <button
+                            type="submit"
+                            style={{
+                              padding: '8px 14px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              backgroundColor: '#0284c7',
+                              color: '#fff',
+                              fontWeight: '600',
+                              fontSize: '13px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Load
+                          </button>
+                        </form>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
