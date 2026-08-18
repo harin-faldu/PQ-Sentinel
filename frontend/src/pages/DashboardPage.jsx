@@ -3,7 +3,7 @@ import { OverviewCards } from '../components/OverviewCards';
 import { RiskGauge } from '../components/RiskGauge';
 import { AssetTable } from '../components/AssetTable';
 import { useRiskMetrics } from '../hooks/useRiskMetrics';
-import { Cpu, ArrowRight, Cloud, Container, Globe, KeyRound } from 'lucide-react';
+import { Cpu, ArrowRight, Container, Globe, KeyRound } from 'lucide-react';
 import Card from '../components/Card';
 import Button from '../components/Button';
 
@@ -13,7 +13,6 @@ export function DashboardPage({ currentScan, onNavigateToMigration }) {
   const sb = metrics.scannerBreakdown || {};
 
   const scannerBadges = [
-    { label: 'Cloud KMS', count: sb.kms || 0, icon: Cloud, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)' },
     { label: 'Container', count: sb.container || 0, icon: Container, color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.12)' },
     { label: 'TLS/Network', count: sb.tls || 0, icon: Globe, color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.12)' },
     { label: 'Secrets', count: sb.secrets || 0, icon: KeyRound, color: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)' },
@@ -37,7 +36,7 @@ export function DashboardPage({ currentScan, onNavigateToMigration }) {
             </h2>
 
             <p style={{ color: 'var(--color-text-secondary)', marginTop: '10px', fontSize: '0.875rem', lineHeight: '1.5' }}>
-              Discovered {metrics.total} cryptographic components across source code, certificates, key stores, AWS KMS, and Docker containers. {metrics.critical + metrics.high} assets require immediate PQC migration.
+              Discovered {metrics.total} cryptographic components across source code, certificates, key stores, and Docker containers. {metrics.critical + metrics.high} assets require immediate PQC migration.
             </p>
           </div>
 

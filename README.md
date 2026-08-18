@@ -1,12 +1,11 @@
 # 🛡️ QuantumVault CBOM Scanner 2.0
 
 > **Enterprise-Grade Post-Quantum Cryptographic Bill of Materials (CBOM) & Risk Management Platform**  
-> *Built with Go 1.22+, React + Vite Web Dashboard, Tree-Sitter AST, Embedded Gitleaks v8, Live AWS KMS SDK & Terraform IaC Drift Engine, Active Network & TLS Endpoint Probing, Vercel-Style GitHub App Popup Ingestion, MySQL Auto-Migrations, and CycloneDX 1.6 Exporter (JSON & XML)*
+> *Built with Go 1.22+, React + Vite Web Dashboard, Tree-Sitter AST, Embedded Gitleaks v8, Active Network & TLS Endpoint Probing, Vercel-Style GitHub App Popup Ingestion, MySQL Auto-Migrations, and CycloneDX 1.6 Exporter (JSON & XML)*
 
 [![Go Version](https://img.shields.io/badge/Go-1.22%2B-00ADD8?style=flat-square&logo=go)](https://golang.org)
 [![React](https://img.shields.io/badge/React-18.2-61DAFB?style=flat-square&logo=react)](https://reactjs.org)
 [![Vite](https://img.shields.io/badge/Vite-5.1-646CFF?style=flat-square&logo=vite)](https://vitejs.dev)
-[![AWS SDK v2](https://img.shields.io/badge/AWS%20SDK%20v2-Live%20KMS%20%26%20Drift-FF9900?style=flat-square&logo=amazon-aws)](https://aws.amazon.com)
 [![NIST PQC](https://img.shields.io/badge/NIST%20PQC-FIPS%20203%20%7C%20204%20%7C%20205-7B2CBF?style=flat-square)](https://csrc.nist.gov/projects/post-quantum-cryptography)
 [![NSA CNSA 2.0](https://img.shields.io/badge/NSA%20CNSA%202.0-Compliant-005F73?style=flat-square)](https://www.nsa.gov)
 [![CycloneDX Spec](https://img.shields.io/badge/CycloneDX-1.6%20JSON%20%26%20XML-38B000?style=flat-square)](https://cyclonedx.org)
@@ -20,7 +19,6 @@
 - [Vercel-Style 1-Click GitHub App Authorization](#-vercel-style-1-click-github-app-authorization)
 - [System Architecture \& Workflow](#-system-architecture--workflow)
 - [Key Features \& Capabilities](#-key-features--capabilities)
-- [Live AWS KMS SDK Discovery \& Terraform IaC Drift Engine](#-live-aws-kms-sdk-discovery--terraform-iac-drift-engine)
 - [Active Network \& Live TLS Endpoint Scanning](#-active-network--live-tls-endpoint-scanning)
 - [Dual Codebase Ingestion Modes](#-dual-codebase-ingestion-modes)
 - [Environment Configuration (`.env`)](#-environment-configuration-env)
@@ -36,9 +34,9 @@
 
 ## 🔍 Overview & Vision
 
-**QuantumVault CBOM Scanner 2.0** is an enterprise-grade Post-Quantum Cryptographic Bill of Materials (CBOM) platform. It provides automated cryptographic discovery across source code ASTs, secrets, containers, live AWS KMS cloud keys, Terraform/CloudFormation IaC declarations, X.509 certificates, Java/PKCS12 keystores, and live network endpoints.
+**QuantumVault CBOM Scanner 2.0** is an enterprise-grade Post-Quantum Cryptographic Bill of Materials (CBOM) platform. It provides automated cryptographic discovery across source code ASTs, secrets, containers, X.509 certificates, Java/PKCS12 keystores, and live network endpoints.
 
-It calculates a **NIST PQC Readiness Score (0-100)**, tracks **NSA CNSA 2.0 regulatory compliance deadlines**, aggregates call-site symbol dependencies, performs **Live AWS KMS vs Terraform IaC Drift Detection**, and exports standard **CycloneDX 1.6 CBOM** specifications in both **JSON** and **XML**.
+It calculates a **NIST PQC Readiness Score (0-100)**, tracks **NSA CNSA 2.0 regulatory compliance deadlines**, aggregates call-site symbol dependencies, and exports standard **CycloneDX 1.6 CBOM** specifications in both **JSON** and **XML**.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -51,19 +49,19 @@ It calculates a **NIST PQC Readiness Score (0-100)**, tracks **NSA CNSA 2.0 regu
 │                   └──────────────────┬─────────────────────┘                    │
 │                                      ▼                                          │
 │ ┌─────────────────────────────────────────────────────────────────────────────┐ │
-│ │ 1. AST Engine │ 2. Git & Secrets │ 3. AWS KMS & IaC Drift │ 4. Syft │ 5. TLS │ │
+│ │ 1. AST Engine │ 2. Git & Secrets │ 3. Syft Containers │ 4. TLS & Network    │ │
 │ └────────────────────────────────────┬────────────────────────────────────────┘ │
 │                                      ▼                                          │
 │ ┌─────────────────────────────────────────────────────────────────────────────┐ │
-│ │ 6. SymbolGraph Tracing & Scope Elevation (Prod 1.5x, Staging 0.7x, Test 0.3x)│ │
+│ │ 5. SymbolGraph Tracing & Scope Elevation (Prod 1.5x, Staging 0.7x, Test 0.3x)│ │
 │ └────────────────────────────────────┬────────────────────────────────────────┘ │
 │                                      ▼                                          │
 │ ┌─────────────────────────────────────────────────────────────────────────────┐ │
-│ │ 7. PQC Risk Score Engine & CNSA 2.0 Timeline Tagging                        │ │
+│ │ 6. PQC Risk Score Engine & CNSA 2.0 Timeline Tagging                        │ │
 │ └────────────────────────────────────┬────────────────────────────────────────┘ │
 │                                      ▼                                          │
 │ ┌────────────────────────────────────┴────────────────────────────────────────┐ │
-│ │ 8. Dashboard Badges & CycloneDX 1.6 Exporter (JSON + XML)                   │ │
+│ │ 7. Dashboard Badges & CycloneDX 1.6 Exporter (JSON + XML)                   │ │
 │ └─────────────────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -139,76 +137,14 @@ sequenceDiagram
 - **Git Commit History Traversal**: Runs `git log --all -p` to inspect deleted files, past commits, and historical exposed credentials in `.git`.
 - **Token Redaction**: Redacts sensitive tokens in logs (`strings.ReplaceAll(output, token, "***REDACTED***")`).
 
-### 5. ☁️ Live AWS KMS SDK Discovery & Terraform IaC Drift Engine
-- **Live AWS API Enumeration ([aws_kms_live.go](file:///c:/CBOM/backend/internal/scanner/aws_kms_live.go))**: Discovers deployed KMS keys across 30+ AWS regions using a bounded worker pool (`maxConcurrentRegions = 5`), calling `kms:ListKeys`, `DescribeKey`, `GetKeyRotationStatus`, and `ListAliases`.
-- **Enhanced IaC Parsing ([aws_kms_iac.go](file:///c:/CBOM/backend/internal/scanner/aws_kms_iac.go))**: Performs dual-pass parsing on `.tf` Terraform files, extracting `aws_kms_key` and `aws_kms_alias` resource blocks and resolving `target_key_id = aws_kms_key.payment_key.id` references back to local key names.
-- **Alias-Based Drift Detector ([aws_kms_drift.go](file:///c:/CBOM/backend/internal/scanner/aws_kms_drift.go))**: Compares live AWS deployed keys against IaC declared keys by **Alias Name (`alias/payment-key`)**:
-  - **Matched**: Keys deployed in AWS AND declared in `.tf` (Healthy state).
-  - **Console-Only Drift**: Keys created manually via AWS Console, missing from Terraform code.
-  - **IaC-Only Drift**: Keys declared in `.tf` code, but not yet deployed in AWS.
-- **Instant Credential Guard (`hasAWSCredentials()`)**: Fast system credential check (< 0.01s instant fallback when no AWS credentials exist, preventing 70s IMDS metadata timeouts).
-
-### 6. 🐳 Container & Syft Image Scanner
+### 5. 🐳 Container & Syft Image Scanner
 - Syft CLI binary orchestrator parsing SBOM packages, assigning **CRITICAL** risk to EOL OpenSSL versions (`libssl1.1`).
 - Static Dockerfile fallback parser with regex security gate preventing command injection.
 
-### 7. 🌐 Active Network & Live TLS Endpoint Scanner
+### 6. 🌐 Active Network & Live TLS Endpoint Scanner
 - **Active TLS Handshake Probe ([tls_scanner.go](file:///c:/CBOM/backend/internal/scanner/tls_scanner.go))**: Connects directly to host:port endpoints (e.g. `api.example.com:443`) via `crypto/tls` handshake.
 - **Protocol & Cipher Suite Analysis**: Evaluates TLS version (TLS 1.0, 1.1, 1.2, 1.3) and cipher algorithms, flagging TLS 1.0/1.1 as **CRITICAL** and TLS 1.2 as **MEDIUM** risk.
 - **X.509 Certificate Inspection**: Validates server certificate chains, expiry dates, and issuer authorities.
-
----
-
-## ☁️ Live AWS KMS SDK Discovery & Terraform IaC Drift Engine
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                   DUAL AWS KMS DISCOVERY & DRIFT DETECTOR              │
-│                                                                        │
-│   [Live AWS API — bounded worker pool, one goroutine per region]       │
-│   1. ec2.DescribeRegions (dynamic) → fallback to static list           │
-│   2. Per region: kms.ListKeysPaginator → all KeyIds                    │
-│   3. Per key: DescribeKey + GetKeyRotationStatus (AccessDenied-safe)   │
-│   4. ListAliases → build KeyId → AliasName map                         │
-│                       │                                                │
-│   [Offline IaC Scanner — unchanged trigger, deeper parsing]            │
-│   1. Parse aws_kms_key blocks (local resource name → attributes)       │
-│   2. Parse aws_kms_alias blocks SEPARATELY, resolve target_key_id      │
-│      back to the aws_kms_key local name it references                 │
-│   3. Produces: alias name → declared key attributes                    │
-│                       │                                                │
-│                       ▼                                                │
-│              MATCH BY ALIAS NAME ("alias/payment-key")                 │
-│                       │                                                │
-│                       ▼                                                │
-│   • Matched: live key + IaC declaration both have this alias           │
-│   • Console-only drift: live key exists, no IaC alias matches it       │
-│   • IaC-only drift: alias declared in .tf, no live key has it yet      │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-### IAM Permissions Required (Least Privilege Policy)
-
-To run Live AWS KMS Discovery, create an IAM Role/User with this policy:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "kms:ListKeys",
-        "kms:DescribeKey",
-        "kms:GetKeyRotationStatus",
-        "kms:ListAliases",
-        "ec2:DescribeRegions"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
 
 ---
 
@@ -273,7 +209,6 @@ cp .env.example .env
 
 - **Vercel-Style Ingestion Modal ([IngestionModal.jsx](file:///c:/CBOM/frontend/src/components/IngestionModal.jsx))**: Popup authorization modal for Local Directories & Remote GitHub App Repositories with optional **Live TLS Endpoints** input field (`api.example.com:443`).
 - **Dedicated Scanner Breakdown Badges ([DashboardPage.jsx](file:///c:/CBOM/frontend/src/pages/DashboardPage.jsx))**:
-  - 🟡 **Cloud KMS Badge**: Discovered KMS keys (Live + IaC + Drift).
   - 🟣 **Container Badge**: Container/Dockerfile & Syft SBOM findings.
   - 🔵 **TLS/Network Badge**: Active TLS handshake & cert findings.
   - 🔴 **Secrets Badge**: Leaked secrets & credentials in source code and git history.
@@ -311,11 +246,6 @@ c:\CBOM
 │   │   ├── scanner/
 │   │   │   ├── scanner.go           # Core Scanner Orchestrator
 │   │   │   ├── symbol_graph.go      # Symbol Call-Site Tracing & Scope Elevation
-│   │   │   ├── aws_kms_scanner.go   # Live AWS KMS & IaC Scanner Orchestrator
-│   │   │   ├── aws_kms_live.go      # Live AWS SDK v2 Key Enumeration
-│   │   │   ├── aws_kms_iac.go       # Terraform .tf Key & Alias Resolution Parser
-│   │   │   ├── aws_kms_drift.go     # Alias-Based Drift Detector Engine
-│   │   │   ├── aws_regions.go       # Dynamic AWS Region Discovery
 │   │   │   ├── container_scanner.go # Container & Syft Scanner
 │   │   │   ├── secret_scanner.go    # Gitleaks History Scanner
 │   │   │   ├── cert_scanner.go      # X.509 & Keystore Scanner
@@ -433,9 +363,6 @@ go test -v ./...
 - `TestLocalGitCloneAndHistorySecretDetection`: Ephemeral git clone history secret scanning against committed & deleted secrets.
 - `TestSecretBoxEncryptionRoundtrip`: AES-256-GCM secret box encryption/decryption for GitHub App RSA `.pem` private keys.
 - `TestSymbolGraphCallSiteAggregationAndScopeElevation`: Symbol call-site aggregation into `CryptoAsset.Details` and `ScopeWeight` elevation to `PRODUCTION` (1.5x).
-- `TestAWSKMSScannerIaCFallback`: Fast fallback to IaC-only when no AWS credentials exist (`hasAWSCredentials()`).
-- `TestParseTerraformKMSBlocks`: Parses `.tf` Terraform files, extracting `aws_kms_key` and resolving `aws_kms_alias` `target_key_id` references.
-- `TestDetectKMSDrift`: Evaluates live AWS KMS findings against Terraform declarations by alias name (Matched, Console-Only Drift, IaC-Only Drift).
 - `TestContainerScannerSyftJSONParsing` & `TestContainerScannerDockerfileFallback`: Syft SBOM package parsing & static Dockerfile fallback parsing.
 - `TestCycloneDXSpecCompliance`: CycloneDX 1.6 specification compliance (`pkg:generic/rsa@2048` PURLs, dynamic NIST levels, JSON & XML export).
 - `TestTargetEntityManagement`: Persistent Target CRUD, auto-generated IDs, and scan history.

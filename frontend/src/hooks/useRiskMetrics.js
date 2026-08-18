@@ -14,7 +14,6 @@ export function useRiskMetrics(assets = []) {
     let libraries = 0;
 
     // Scanner-specific breakdown counts
-    let kmsFindings = 0;
     let containerFindings = 0;
     let tlsFindings = 0;
     let secretFindings = 0;
@@ -61,9 +60,6 @@ export function useRiskMetrics(assets = []) {
       // Detect scanner origin from name/details patterns
       const name = (a.name || '').toLowerCase();
       const details = (a.details || '').toLowerCase();
-      if (name.includes('aws kms') || name.includes('cloudformation aws kms') || details.includes('aws kms')) {
-        kmsFindings++;
-      }
       if (name.includes('container') || name.includes('dockerfile') || details.includes('dockerfile') || details.includes('syft')) {
         containerFindings++;
       }
@@ -96,7 +92,6 @@ export function useRiskMetrics(assets = []) {
         libraries,
       },
       scannerBreakdown: {
-        kms: kmsFindings,
         container: containerFindings,
         tls: tlsFindings,
         secrets: secretFindings,
