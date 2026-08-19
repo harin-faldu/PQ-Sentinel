@@ -51,10 +51,6 @@ export const api = {
   }),
   getTargetScans: (targetId) => fetchApi(`/targets/${targetId}/scans`),
 
-  // GitHub App Integration
-  getGitHubRepos: (installationId) => fetchApi(`/github/repos?installation_id=${installationId}`),
-  getGitHubInstallUrl: () => fetchApi('/github/install-url'),
-
   // Migration Plan & CycloneDX Export
   getMigrationPlan: (scanId) => fetchApi(`/scans/${scanId}/migration`),
   getCycloneDXJsonUrl: (scanId) => `${API_BASE}/scans/${scanId}/cyclonedx`,

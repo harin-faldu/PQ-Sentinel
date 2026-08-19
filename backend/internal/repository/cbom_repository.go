@@ -1,14 +1,10 @@
 package repository
 
 import (
-	"database/sql"
 	"fmt"
-	"log"
-	"strings"
 	"sync"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/quantumpq/qv-cbom/internal/models"
 )
 
@@ -22,11 +18,11 @@ type CBOMRepository interface {
 	GetScanByID(id string) (*models.ScanDetail, error)
 	GetScansByTarget(targetID string) ([]models.ScanSummary, error)
 	GetLatestScanByTargetID(targetID string) (*models.ScanDetail, error)
-	UpdateTargetLastScannedSHA(targetID string, sha string) error
 	SaveMigrationPlan(plan models.MigrationPlan) error
 	GetMigrationPlanByScanID(scanID string) (*models.MigrationPlan, error)
 }
 
+// MemoryRepository implements pure in-memory, thread-safe storage (Zero-DB / Stateless mode)
 type MemoryRepository struct {
 	mu             sync.RWMutex
 	targets        map[string]models.Target
@@ -140,18 +136,6 @@ func (r *MemoryRepository) GetScanByID(id string) (*models.ScanDetail, error) {
 	}, nil
 }
 
-func (r *MemoryRepository) UpdateTargetLastScannedSHA(targetID string, sha string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	target, ok := r.targets[targetID]
-	if !ok {
-		return fmt.Errorf("target not found")
-	}
-	target.LastScannedSHA = sha
-	r.targets[targetID] = target
-	return nil
-}
-
 func (r *MemoryRepository) GetLatestScanByTargetID(targetID string) (*models.ScanDetail, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -198,7 +182,7 @@ func (r *MemoryRepository) GetMigrationPlanByScanID(scanID string) (*models.Migr
 	return &plan, nil
 }
 
-// Seed initial realistic demonstration data so the UI displays rich results out-of-the-box
+// Seed initial demonstration data so the UI displays rich results out-of-the-box
 func (r *MemoryRepository) seedInitialData() {
 	now := time.Now()
 	expiryCert := now.AddDate(1, 2, 0)
@@ -421,338 +405,4 @@ func (r *MemoryRepository) seedInitialData() {
 		},
 		CreatedAt: now,
 	}
-}
-
-// MySQLRepository implementer for production MySQL databases
-type MySQLRepository struct {
-	db *sql.DB
-}
-
-func NewMySQLRepository(dbSource string) (*MySQLRepository, error) {
-	// Auto-create database if specified in DSN
-	ensureDatabaseExists(dbSource)
-
-	db, err := sql.Open("mysql", dbSource)
-	if err != nil {
-		return nil, err
-	}
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
-
-	if err := db.Ping(); err != nil {
-		return nil, fmt.Errorf("mysql connection failed: %w", err)
-	}
-
-	repo := &MySQLRepository{db: db}
-	if err := repo.createTables(); err != nil {
-		log.Printf("Error: MySQL table creation failed: %v", err)
-		return nil, fmt.Errorf("failed to create tables: %w", err)
-	}
-	return repo, nil
-}
-
-func ensureDatabaseExists(dbSource string) {
-	// Parse DSN format: user:pass@tcp(host:port)/dbname?opts
-	idxSlash := strings.Index(dbSource, "/")
-	if idxSlash == -1 {
-		return
-	}
-	sub := dbSource[idxSlash+1:]
-	idxQuestion := strings.Index(sub, "?")
-	dbName := sub
-	if idxQuestion != -1 {
-		dbName = sub[:idxQuestion]
-	}
-	if dbName == "" {
-		return
-	}
-
-	rootDSN := dbSource[:idxSlash+1]
-	if idxQuestion != -1 {
-		rootDSN += sub[idxQuestion:]
-	}
-
-	tempDB, err := sql.Open("mysql", rootDSN)
-	if err != nil {
-		return
-	}
-	defer tempDB.Close()
-
-	_, _ = tempDB.Exec(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`", dbName))
-}
-
-func (r *MySQLRepository) createTables() error {
-	targetsTable := `
-	CREATE TABLE IF NOT EXISTS targets (
-		id VARCHAR(64) PRIMARY KEY,
-		name VARCHAR(255) NOT NULL,
-		type VARCHAR(32) NOT NULL,
-		location VARCHAR(500) NOT NULL,
-		installation_id BIGINT NULL,
-		full_name VARCHAR(255) NULL,
-		default_branch VARCHAR(100) NULL,
-		last_scanned_sha VARCHAR(64) NULL,
-		created_at DATETIME NOT NULL
-	);`
-
-	scansTable := `
-	CREATE TABLE IF NOT EXISTS scans (
-		id VARCHAR(64) PRIMARY KEY,
-		target_id VARCHAR(64),
-		target_directory VARCHAR(500),
-		total_files INT,
-		scanned_files INT,
-		total_assets INT,
-		critical_count INT,
-		high_count INT,
-		medium_count INT,
-		safe_count INT,
-		pqc_score INT,
-		status VARCHAR(32),
-		notice VARCHAR(255) NULL,
-		duration_ms BIGINT,
-		created_at DATETIME,
-		FOREIGN KEY (target_id) REFERENCES targets(id) ON DELETE SET NULL
-	);`
-
-	assetsTable := `
-	CREATE TABLE IF NOT EXISTS crypto_assets (
-		id VARCHAR(64) PRIMARY KEY,
-		scan_id VARCHAR(64),
-		name VARCHAR(255),
-		asset_type VARCHAR(64),
-		location VARCHAR(255),
-		line_number INT,
-		algorithm VARCHAR(64),
-		key_size INT,
-		risk_level VARCHAR(32),
-		risk_rationale TEXT,
-		pqc_status VARCHAR(32),
-		pqc_replacement VARCHAR(128),
-		issuer VARCHAR(255),
-		details TEXT,
-		created_at DATETIME,
-		FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
-	);`
-
-	if _, err := r.db.Exec(targetsTable); err != nil {
-		return fmt.Errorf("failed to create targets table: %w", err)
-	}
-	if _, err := r.db.Exec(scansTable); err != nil {
-		return fmt.Errorf("failed to create scans table: %w", err)
-	}
-	if _, err := r.db.Exec(assetsTable); err != nil {
-		return fmt.Errorf("failed to create crypto_assets table: %w", err)
-	}
-
-	// Idempotent column additions for existing installations
-	_, _ = r.db.Exec(`ALTER TABLE targets ADD COLUMN installation_id BIGINT NULL`)
-	_, _ = r.db.Exec(`ALTER TABLE targets ADD COLUMN full_name VARCHAR(255) NULL`)
-	_, _ = r.db.Exec(`ALTER TABLE targets ADD COLUMN default_branch VARCHAR(100) NULL`)
-	_, _ = r.db.Exec(`ALTER TABLE targets ADD COLUMN last_scanned_sha VARCHAR(64) NULL`)
-	_, _ = r.db.Exec(`ALTER TABLE scans ADD COLUMN notice VARCHAR(255) NULL`)
-
-	return nil
-}
-
-func (r *MySQLRepository) CreateTarget(t models.Target) error {
-	if t.ID == "" {
-		t.ID = fmt.Sprintf("target-%s", models.GenerateUUID()[:8])
-	}
-	if t.CreatedAt.IsZero() {
-		t.CreatedAt = time.Now()
-	}
-	query := `INSERT INTO targets (id, name, type, location, installation_id, full_name, default_branch, last_scanned_sha, created_at)
-	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	          ON DUPLICATE KEY UPDATE
-	          installation_id = IF(VALUES(installation_id) IS NOT NULL, VALUES(installation_id), installation_id),
-	          default_branch = VALUES(default_branch),
-	          full_name = VALUES(full_name)`
-	var instID sql.NullInt64
-	if t.InstallationID > 0 {
-		instID.Int64 = t.InstallationID
-		instID.Valid = true
-	}
-	_, err := r.db.Exec(query, t.ID, t.Name, string(t.Type), t.Location, instID, t.FullName, t.DefaultBranch, t.LastScannedSHA, t.CreatedAt)
-	return err
-}
-
-func (r *MySQLRepository) ListTargets() ([]models.Target, error) {
-	rows, err := r.db.Query(`SELECT id, name, type, location, installation_id, full_name, default_branch, last_scanned_sha, created_at FROM targets ORDER BY created_at DESC`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var targets []models.Target
-	for rows.Next() {
-		var t models.Target
-		var tType string
-		var instID sql.NullInt64
-		var fullName, defaultBranch, lastSHA sql.NullString
-		if err := rows.Scan(&t.ID, &t.Name, &tType, &t.Location, &instID, &fullName, &defaultBranch, &lastSHA, &t.CreatedAt); err != nil {
-			return nil, err
-		}
-		t.Type = models.TargetType(tType)
-		if instID.Valid {
-			t.InstallationID = instID.Int64
-		}
-		t.FullName = fullName.String
-		t.DefaultBranch = defaultBranch.String
-		t.LastScannedSHA = lastSHA.String
-		targets = append(targets, t)
-	}
-	return targets, nil
-}
-
-func (r *MySQLRepository) GetTarget(id string) (*models.Target, error) {
-	var t models.Target
-	var tType string
-	var instID sql.NullInt64
-	var fullName, defaultBranch, lastSHA sql.NullString
-
-	err := r.db.QueryRow(`SELECT id, name, type, location, installation_id, full_name, default_branch, last_scanned_sha, created_at FROM targets WHERE id = ?`, id).Scan(
-		&t.ID, &t.Name, &tType, &t.Location, &instID, &fullName, &defaultBranch, &lastSHA, &t.CreatedAt)
-	if err != nil {
-		return nil, err
-	}
-	t.Type = models.TargetType(tType)
-	if instID.Valid {
-		t.InstallationID = instID.Int64
-	}
-	t.FullName = fullName.String
-	t.DefaultBranch = defaultBranch.String
-	t.LastScannedSHA = lastSHA.String
-	return &t, nil
-}
-
-func (r *MySQLRepository) GetScansByTarget(targetID string) ([]models.ScanSummary, error) {
-	rows, err := r.db.Query(`SELECT id, target_id, target_directory, total_files, scanned_files, total_assets, critical_count, high_count, medium_count, safe_count, pqc_score, status, notice, duration_ms, created_at FROM scans WHERE target_id = ? ORDER BY created_at DESC`, targetID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var scans []models.ScanSummary
-	for rows.Next() {
-		var s models.ScanSummary
-		var notice sql.NullString
-		if err := rows.Scan(&s.ID, &s.TargetID, &s.TargetDirectory, &s.TotalFiles, &s.ScannedFiles, &s.TotalAssets, &s.CriticalCount, &s.HighCount, &s.MediumCount, &s.SafeCount, &s.PQCScore, &s.Status, &notice, &s.DurationMs, &s.CreatedAt); err != nil {
-			return nil, err
-		}
-		s.Notice = notice.String
-		scans = append(scans, s)
-	}
-	return scans, nil
-}
-
-func (r *MySQLRepository) SaveScan(summary models.ScanSummary, assets []models.CryptoAsset) error {
-	tx, err := r.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	if summary.CreatedAt.IsZero() {
-		summary.CreatedAt = time.Now()
-	}
-
-	var notice sql.NullString
-	if summary.Notice != "" {
-		notice.String = summary.Notice
-		notice.Valid = true
-	}
-
-	queryScan := `INSERT INTO scans (id, target_id, target_directory, total_files, scanned_files, total_assets, critical_count, high_count, medium_count, safe_count, pqc_score, status, notice, duration_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	_, err = tx.Exec(queryScan, summary.ID, summary.TargetID, summary.TargetDirectory, summary.TotalFiles, summary.ScannedFiles, summary.TotalAssets, summary.CriticalCount, summary.HighCount, summary.MediumCount, summary.SafeCount, summary.PQCScore, summary.Status, notice, summary.DurationMs, summary.CreatedAt)
-	if err != nil {
-		return err
-	}
-
-	queryAsset := `INSERT INTO crypto_assets (id, scan_id, name, asset_type, location, line_number, algorithm, key_size, risk_level, risk_rationale, pqc_status, pqc_replacement, issuer, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	for _, a := range assets {
-		createdAt := a.CreatedAt
-		if createdAt.IsZero() {
-			createdAt = time.Now()
-		}
-		_, err = tx.Exec(queryAsset, a.ID, a.ScanID, a.Name, a.AssetType, a.Location, a.LineNumber, a.Algorithm, a.KeySize, a.RiskLevel, a.RiskRationale, a.PQCStatus, a.PQCReplacement, a.Issuer, a.Details, createdAt)
-		if err != nil {
-			return err
-		}
-	}
-
-	return tx.Commit()
-}
-
-func (r *MySQLRepository) GetScans() ([]models.ScanSummary, error) {
-	rows, err := r.db.Query(`SELECT id, target_id, target_directory, total_files, scanned_files, total_assets, critical_count, high_count, medium_count, safe_count, pqc_score, status, notice, duration_ms, created_at FROM scans ORDER BY created_at DESC`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var scans []models.ScanSummary
-	for rows.Next() {
-		var s models.ScanSummary
-		var notice sql.NullString
-		if err := rows.Scan(&s.ID, &s.TargetID, &s.TargetDirectory, &s.TotalFiles, &s.ScannedFiles, &s.TotalAssets, &s.CriticalCount, &s.HighCount, &s.MediumCount, &s.SafeCount, &s.PQCScore, &s.Status, &notice, &s.DurationMs, &s.CreatedAt); err != nil {
-			return nil, err
-		}
-		s.Notice = notice.String
-		scans = append(scans, s)
-	}
-	return scans, nil
-}
-
-func (r *MySQLRepository) GetScanByID(id string) (*models.ScanDetail, error) {
-	var s models.ScanSummary
-	var notice sql.NullString
-	err := r.db.QueryRow(`SELECT id, target_id, target_directory, total_files, scanned_files, total_assets, critical_count, high_count, medium_count, safe_count, pqc_score, status, notice, duration_ms, created_at FROM scans WHERE id = ?`, id).Scan(
-		&s.ID, &s.TargetID, &s.TargetDirectory, &s.TotalFiles, &s.ScannedFiles, &s.TotalAssets, &s.CriticalCount, &s.HighCount, &s.MediumCount, &s.SafeCount, &s.PQCScore, &s.Status, &notice, &s.DurationMs, &s.CreatedAt)
-	if err != nil {
-		return nil, err
-	}
-	s.Notice = notice.String
-
-	rows, err := r.db.Query(`SELECT id, scan_id, name, asset_type, location, line_number, algorithm, key_size, risk_level, risk_rationale, pqc_status, pqc_replacement, issuer, details, created_at FROM crypto_assets WHERE scan_id = ?`, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var assets []models.CryptoAsset
-	for rows.Next() {
-		var a models.CryptoAsset
-		if err := rows.Scan(&a.ID, &a.ScanID, &a.Name, &a.AssetType, &a.Location, &a.LineNumber, &a.Algorithm, &a.KeySize, &a.RiskLevel, &a.RiskRationale, &a.PQCStatus, &a.PQCReplacement, &a.Issuer, &a.Details, &a.CreatedAt); err != nil {
-			return nil, err
-		}
-		assets = append(assets, a)
-	}
-
-	return &models.ScanDetail{Summary: s, Assets: assets}, nil
-}
-
-func (r *MySQLRepository) UpdateTargetLastScannedSHA(targetID string, sha string) error {
-	query := `UPDATE targets SET last_scanned_sha = ? WHERE id = ?`
-	_, err := r.db.Exec(query, sha, targetID)
-	return err
-}
-
-func (r *MySQLRepository) GetLatestScanByTargetID(targetID string) (*models.ScanDetail, error) {
-	query := `SELECT id FROM scans WHERE target_id = ? ORDER BY created_at DESC LIMIT 1`
-	var scanID string
-	err := r.db.QueryRow(query, targetID).Scan(&scanID)
-	if err != nil {
-		return nil, err
-	}
-	return r.GetScanByID(scanID)
-}
-
-func (r *MySQLRepository) SaveMigrationPlan(plan models.MigrationPlan) error {
-	return nil
-}
-
-func (r *MySQLRepository) GetMigrationPlanByScanID(scanID string) (*models.MigrationPlan, error) {
-	return nil, fmt.Errorf("migration plan not found")
 }

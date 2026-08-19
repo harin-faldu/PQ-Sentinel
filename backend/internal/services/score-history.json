@@ -218,5 +218,25 @@
     "medium": 0,
     "safe": 0,
     "timestamp": "2026-08-12T17:00:20.6435466+05:30"
+  },
+  {
+    "scan_id": "scan-1787131325",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-19T14:52:05.5469628+05:30"
+  },
+  {
+    "scan_id": "scan-1787131854",
+    "target": "sample_target",
+    "pqc_score": 100,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "safe": 0,
+    "timestamp": "2026-08-19T15:00:54.5470762+05:30"
   }
 ]

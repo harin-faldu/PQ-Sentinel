@@ -1,7 +1,6 @@
 package services
 
 import (
-	"crypto/rsa"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/quantumpq/qv-cbom/internal/github"
 	"github.com/quantumpq/qv-cbom/internal/models"
 	"github.com/quantumpq/qv-cbom/internal/repository"
 	"github.com/quantumpq/qv-cbom/internal/risk"
@@ -34,11 +32,9 @@ func sanitizePURLString(s string) string {
 const scoreHistoryFile = "score-history.json"
 
 type CBOMService struct {
-	repo             repository.CBOMRepository
-	scanner          *scanner.Scanner
-	riskEngine       *risk.RiskEngine
-	githubAppID      string
-	githubPrivateKey *rsa.PrivateKey
+	repo       repository.CBOMRepository
+	scanner    *scanner.Scanner
+	riskEngine *risk.RiskEngine
 }
 
 func NewCBOMService(repo repository.CBOMRepository) *CBOMService {
@@ -47,11 +43,6 @@ func NewCBOMService(repo repository.CBOMRepository) *CBOMService {
 		scanner:    scanner.NewScanner(),
 		riskEngine: risk.NewRiskEngine(),
 	}
-}
-
-func (s *CBOMService) SetGitHubAppCredentials(appID string, privateKey *rsa.PrivateKey) {
-	s.githubAppID = appID
-	s.githubPrivateKey = privateKey
 }
 
 func (s *CBOMService) CreateTarget(target models.Target) (*models.Target, error) {
@@ -89,30 +80,6 @@ func (s *CBOMService) ExecuteScanByTargetWithTLS(targetID string, tlsTargets []s
 		return nil, fmt.Errorf("unknown target: %w", err)
 	}
 
-	var headSHA string
-
-	// Early Skip Check for GitHub Repositories (Unchanged remote HEAD commit)
-	if target.Type == models.TargetTypeGitHubRepo {
-		appJWT, err := github.GenerateAppJWT(s.githubAppID, s.githubPrivateKey)
-		if err == nil {
-			tokenResp, err := github.GetInstallationToken(appJWT, target.InstallationID)
-			if err == nil && tokenResp != nil {
-				branch := target.DefaultBranch
-				if branch == "" {
-					branch = "main"
-				}
-				headSHA, err = github.GetRemoteHeadSHA(tokenResp.Token, target.FullName, branch)
-				if err == nil && headSHA != "" && target.LastScannedSHA != "" && headSHA == target.LastScannedSHA {
-					existingDetail, err := s.repo.GetLatestScanByTargetID(target.ID)
-					if err == nil && existingDetail != nil {
-						existingDetail.Summary.Notice = fmt.Sprintf("Repository commit unchanged (SHA: %s). Scan skipped.", headSHA)
-						return existingDetail, nil
-					}
-				}
-			}
-		}
-	}
-
 	scanID := fmt.Sprintf("scan-%d", time.Now().Unix())
 	startTime := time.Now()
 
@@ -120,79 +87,17 @@ func (s *CBOMService) ExecuteScanByTargetWithTLS(targetID string, tlsTargets []s
 	var totalFiles, scannedFiles int
 
 	switch target.Type {
-	case models.TargetTypeRepo:
-		// MODE 1: LOCAL DIRECTORY CODEBASE SCANNING
-		assets, totalFiles, scannedFiles, err = s.scanner.ScanDirectory(target.Location, scanID)
-		if err != nil {
-			return nil, fmt.Errorf("directory scan failed: %w", err)
-		}
-
-	case models.TargetTypeGitHubRepo:
-		// MODE 2: REMOTE GITHUB REPOSITORY SCANNING VIA GITHUB APP
-		if s.githubAppID == "" || s.githubPrivateKey == nil {
-			return nil, fmt.Errorf("GitHub App credentials not configured on server. Please check GITHUB_APP_ID and GITHUB_PRIVATE_KEY_PATH in .env")
-		}
-
-		// Auto-recover installation_id if target was created before GitHub App authorization
-		if target.InstallationID <= 0 {
-			if allTargets, err := s.repo.ListTargets(); err == nil {
-				for _, t := range allTargets {
-					if t.InstallationID > 0 {
-						target.InstallationID = t.InstallationID
-						break
-					}
-				}
-			}
-		}
-
-		if target.InstallationID <= 0 {
-			return nil, fmt.Errorf("missing or invalid GitHub Installation ID for target '%s'. Please click 'Install App on GitHub' to authorize access", target.Name)
-		}
-
-		appJWT, err := github.GenerateAppJWT(s.githubAppID, s.githubPrivateKey)
-		if err != nil {
-			return nil, fmt.Errorf("github app JWT generation failed: %w", err)
-		}
-		tokenResp, err := github.GetInstallationToken(appJWT, target.InstallationID)
-		if err != nil {
-			return nil, fmt.Errorf("github installation token exchange failed (Installation ID %d may be revoked/expired): %w", target.InstallationID, err)
-		}
-
-		branch := target.DefaultBranch
-		if branch == "" {
-			branch = "main"
-		}
-
-		tempDir, err := os.MkdirTemp("", "gh-scan-*")
-		if err != nil {
-			return nil, fmt.Errorf("failed to create temp workspace: %w", err)
-		}
-		defer os.RemoveAll(tempDir)
-
-		if err := github.CloneRepository(tokenResp.Token, target.FullName, branch, tempDir); err != nil {
-			return nil, fmt.Errorf("github clone failed: %w", err)
-		}
-
-		assets, totalFiles, scannedFiles, err = s.scanner.ScanDirectory(tempDir, scanID)
-		if err != nil {
-			return nil, fmt.Errorf("github directory scan failed: %w", err)
-		}
-
 	case models.TargetTypeHost:
 		assets = s.scanner.ScanTLSEndpoints([]string{target.Location}, scanID)
 		totalFiles = 1
 		scannedFiles = 1
 
 	default:
-		// Fallback to directory scan
+		// LOCAL DIRECTORY CODEBASE SCANNING
 		assets, totalFiles, scannedFiles, err = s.scanner.ScanDirectory(target.Location, scanID)
 		if err != nil {
 			return nil, fmt.Errorf("directory scan failed: %w", err)
 		}
-	}
-
-	if target.Type == models.TargetTypeGitHubRepo && headSHA != "" {
-		_ = s.repo.UpdateTargetLastScannedSHA(target.ID, headSHA)
 	}
 
 	// TLS endpoint scanning if frontend sent targets

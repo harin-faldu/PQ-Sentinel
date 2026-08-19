@@ -8,8 +8,6 @@ export function useCbomScan() {
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState(null);
-  const [githubRepos, setGithubRepos] = useState([]);
-  const [loadingRepos, setLoadingRepos] = useState(false);
 
   const loadScansAndTargets = useCallback(async () => {
     try {
@@ -72,56 +70,6 @@ export function useCbomScan() {
     }
   };
 
-  const fetchGitHubRepositories = async (installationId) => {
-    try {
-      setLoadingRepos(true);
-      setError(null);
-      const repos = await api.getGitHubRepos(installationId);
-      setGithubRepos(repos || []);
-      if (installationId) {
-        localStorage.setItem('cbom_github_installation_id', installationId);
-      }
-      return repos;
-    } catch (err) {
-      localStorage.removeItem('cbom_github_installation_id');
-      setError(`GitHub App Connection: ${err.message}. Please install or re-authorize the app.`);
-      throw err;
-    } finally {
-      setLoadingRepos(false);
-    }
-  };
-
-  const startGitHubScan = async (repo, installationId) => {
-    try {
-      setScanning(true);
-      setError(null);
-
-      const activeInstId = installationId || localStorage.getItem('cbom_github_installation_id') || '0';
-      const parsedInstId = parseInt(activeInstId, 10);
-
-      // Create GitHub target
-      const newTarget = await api.createTarget({
-        name: repo.name || repo.full_name,
-        type: 'GITHUB_REPO',
-        location: repo.full_name,
-        installation_id: !isNaN(parsedInstId) && parsedInstId > 0 ? parsedInstId : 0,
-        full_name: repo.full_name,
-        default_branch: repo.default_branch || 'main',
-      });
-
-      // Execute scan by target
-      const detail = await api.triggerScanByTarget(newTarget.id);
-      setCurrentScan(detail);
-      await loadScansAndTargets();
-      return detail;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    } finally {
-      setScanning(false);
-    }
-  };
-
   useEffect(() => {
     loadScansAndTargets();
   }, [loadScansAndTargets]);
@@ -133,12 +81,8 @@ export function useCbomScan() {
     loading,
     scanning,
     error,
-    githubRepos,
-    loadingRepos,
     selectScan,
     startLocalScan,
-    fetchGitHubRepositories,
-    startGitHubScan,
     reload: loadScansAndTargets,
     setError,
   };

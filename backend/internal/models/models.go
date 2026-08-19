@@ -97,19 +97,14 @@ const (
 	TargetTypeRepo         TargetType = "REPO"
 	TargetTypeHost         TargetType = "HOST"
 	TargetTypeCloudAccount TargetType = "CLOUD_ACCOUNT"
-	TargetTypeGitHubRepo   TargetType = "GITHUB_REPO"
 )
 
 type Target struct {
-	ID             string     `json:"id"`
-	Name           string     `json:"name"`
-	Type           TargetType `json:"type"`
-	Location       string     `json:"location"`
-	InstallationID int64      `json:"installation_id,omitempty"`
-	FullName       string     `json:"full_name,omitempty"`
-	DefaultBranch  string     `json:"default_branch,omitempty"`
-	LastScannedSHA string     `json:"last_scanned_sha,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	Type      TargetType `json:"type"`
+	Location  string     `json:"location"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // ScanSummary represents the metadata of a CBOM scan run
