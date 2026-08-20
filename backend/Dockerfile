@@ -1,14 +1,12 @@
 # =====================================================================
 # Stage 1: Build Go Backend Binary
 # =====================================================================
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /build
 
-# Install build dependencies
-RUN apk add --no-cache git build-base
-
-# Download dependencies
+# Download dependencies (git for private repos if needed)
+RUN apk add --no-cache git
 COPY go.mod go.sum ./
 RUN go mod download
 

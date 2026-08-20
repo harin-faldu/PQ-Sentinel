@@ -249,7 +249,7 @@ cd c:\CBOM
 docker compose up --build
 ```
 - **Web Dashboard**: Open [http://localhost:3000](http://localhost:3000) in your browser.
-- **REST API & Health**: [http://localhost:8080/api/v1/health](http://localhost:8080/api/v1/health)
+- **REST API & Health**: [http://localhost:8081/api/v1/health](http://localhost:8081/api/v1/health)
 
 ---
 

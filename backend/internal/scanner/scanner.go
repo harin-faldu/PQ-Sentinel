@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -106,6 +107,69 @@ func buildDefaultRulesConfig() *RulesConfig {
 
 // ScanDirectory walks the target directory and parses code, certs, configs, and secrets
 func (s *Scanner) ScanDirectory(targetDir string, scanID string) ([]models.CryptoAsset, int, int, error) {
+	targetDir = strings.TrimSpace(targetDir)
+	cleanTarget := strings.ReplaceAll(targetDir, "\\", "/")
+
+	// 1. Check if directory exists directly (e.g. running on Windows host or relative path)
+	if stat, err := os.Stat(targetDir); err == nil && stat.IsDir() {
+		// Valid directly
+	} else if stat, err := os.Stat(cleanTarget); err == nil && stat.IsDir() {
+		targetDir = cleanTarget
+	} else {
+		resolved := false
+
+		// 2. Dynamic Host Drive Translation for Docker (e.g. C:/Users/harin/Desktop -> /host_c/Users/harin/Desktop or /Users/harin/Desktop)
+		if len(cleanTarget) >= 2 && (cleanTarget[1] == ':' || strings.HasPrefix(strings.ToLower(cleanTarget), "c:/")) {
+			colonIdx := strings.Index(cleanTarget, ":")
+			var relFromDrive string
+			if colonIdx != -1 && len(cleanTarget) > colonIdx+1 {
+				relFromDrive = strings.TrimPrefix(cleanTarget[colonIdx+1:], "/")
+			} else {
+				relFromDrive = cleanTarget
+			}
+
+			cCandidates := []string{
+				filepath.Join("/host_c", relFromDrive),
+				filepath.Join("/c", relFromDrive),
+				filepath.Join("/", relFromDrive),
+			}
+			for _, candidate := range cCandidates {
+				if statCandidate, errCandidate := os.Stat(candidate); errCandidate == nil && statCandidate.IsDir() {
+					targetDir = candidate
+					resolved = true
+					break
+				}
+			}
+		}
+
+		// 3. Fallback to baseName relative resolution (e.g. sample_target)
+		if !resolved {
+			baseName := filepath.Base(cleanTarget)
+			if baseName != "" && baseName != "." && baseName != "/" {
+				candidates := []string{
+					baseName,
+					filepath.Join(".", baseName),
+					filepath.Join("..", baseName),
+					filepath.Join("../..", baseName),
+					filepath.Join("../../..", baseName),
+					filepath.Join("/app", baseName),
+					filepath.Join("/", baseName),
+				}
+				for _, candidate := range candidates {
+					if statCandidate, errCandidate := os.Stat(candidate); errCandidate == nil && statCandidate.IsDir() {
+						targetDir = candidate
+						resolved = true
+						break
+					}
+				}
+			}
+		}
+
+		if !resolved {
+			return nil, 0, 0, fmt.Errorf("directory not found or inaccessible: '%s'", targetDir)
+		}
+	}
+
 	var assets []models.CryptoAsset
 	totalFiles := 0
 	scannedFiles := 0

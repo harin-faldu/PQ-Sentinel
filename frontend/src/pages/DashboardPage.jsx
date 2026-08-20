@@ -28,7 +28,7 @@ export function DashboardPage({ currentScan, onNavigateToMigration }) {
         <Card style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(0, 168, 255, 0.15)', color: 'var(--color-primary)', padding: '4px 12px', borderRadius: '50px', fontSize: '0.75rem', fontWeight: 600 }}>
-              <Cpu size={14} /> ACTIVE TARGET: {currentScan?.summary?.target_directory || 'PaymentGatewayService'}
+              <Cpu size={14} /> ACTIVE TARGET: {currentScan?.summary?.target_directory || 'sample_target'}
             </div>
             
             <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginTop: '12px', lineHeight: '1.3', color: 'var(--color-text-primary)' }}>

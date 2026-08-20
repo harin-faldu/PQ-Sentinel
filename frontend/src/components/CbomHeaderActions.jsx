@@ -1,36 +1,33 @@
 import React from 'react';
-import { PlusCircle, Download, RefreshCw } from 'lucide-react';
+import { PlusCircle, Download, RefreshCw, Folder } from 'lucide-react';
 import Button from './Button';
 
-export function CbomHeaderActions({ currentScan, scans, onSelectScan, onOpenIngestion, onOpenExport, scanning }) {
+export function CbomHeaderActions({ currentScan, onOpenIngestion, onOpenExport, scanning }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-      {/* Scan Selector */}
-      {scans && scans.length > 0 && (
-        <select
-          value={currentScan?.summary?.id || ''}
-          onChange={(e) => onSelectScan(e.target.value)}
-          style={{
-            backgroundColor: 'var(--color-bg-tertiary)',
-            color: 'var(--color-text-primary)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '50px',
-            padding: '8px 16px',
-            fontSize: 'var(--font-size-xs)',
-            fontWeight: 'var(--font-weight-medium)',
-            outline: 'none',
-            cursor: 'pointer',
-            maxWidth: '200px',
-            textOverflow: 'ellipsis',
-            fontFamily: 'inherit',
-          }}
-        >
-          {scans.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.target_directory || s.id} ({new Date(s.created_at).toLocaleTimeString()})
-            </option>
-          ))}
-        </select>
+      {/* Active Scan Badge */}
+      {currentScan?.summary && (
+        <div style={{
+          backgroundColor: 'var(--color-bg-tertiary)',
+          color: 'var(--color-text-primary)',
+          border: '1px solid var(--color-border)',
+          borderRadius: '50px',
+          padding: '7px 14px',
+          fontSize: 'var(--font-size-xs)',
+          fontWeight: 'var(--font-weight-medium)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          maxWidth: '260px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          <Folder size={13} style={{ color: '#38bdf8', flexShrink: 0 }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {currentScan.summary.target_directory || currentScan.summary.id}
+          </span>
+        </div>
       )}
 
       {/* Scan Codebase Button */}

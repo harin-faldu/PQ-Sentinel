@@ -17,6 +17,12 @@ func NewCBOMController(service *services.CBOMService) *CBOMController {
 	return &CBOMController{service: service}
 }
 
+func writeJSONError(w http.ResponseWriter, msg string, code int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
 type ScanRequest struct {
 	TargetID        string   `json:"target_id"`
 	TargetDirectory string   `json:"target_directory"`
@@ -31,7 +37,7 @@ func (c *CBOMController) HandleTargets(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		targets, err := c.service.ListTargets()
 		if err != nil {
-			http.Error(w, `{"error":"Failed to retrieve targets"}`, http.StatusInternalServerError)
+			writeJSONError(w, "Failed to retrieve targets", http.StatusInternalServerError)
 			return
 		}
 		json.NewEncoder(w).Encode(targets)
@@ -39,19 +45,19 @@ func (c *CBOMController) HandleTargets(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		var target models.Target
 		if err := json.NewDecoder(r.Body).Decode(&target); err != nil {
-			http.Error(w, `{"error":"Invalid request payload"}`, http.StatusBadRequest)
+			writeJSONError(w, "Invalid request payload", http.StatusBadRequest)
 			return
 		}
 		created, err := c.service.CreateTarget(target)
 		if err != nil {
-			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+			writeJSONError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(created)
 
 	default:
-		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -62,7 +68,7 @@ func (c *CBOMController) HandleTargetDetail(w http.ResponseWriter, r *http.Reque
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/targets/")
 	parts := strings.Split(path, "/")
 	if len(parts) == 0 || parts[0] == "" {
-		http.Error(w, `{"error":"Target ID required"}`, http.StatusBadRequest)
+		writeJSONError(w, "Target ID required", http.StatusBadRequest)
 		return
 	}
 
@@ -73,7 +79,7 @@ func (c *CBOMController) HandleTargetDetail(w http.ResponseWriter, r *http.Reque
 		case "scans":
 			scans, err := c.service.GetScansByTarget(targetID)
 			if err != nil {
-				http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+				writeJSONError(w, err.Error(), http.StatusNotFound)
 				return
 			}
 			json.NewEncoder(w).Encode(scans)
@@ -81,7 +87,7 @@ func (c *CBOMController) HandleTargetDetail(w http.ResponseWriter, r *http.Reque
 
 		case "scan":
 			if r.Method != http.MethodPost {
-				http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+				writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
 			// Parse optional TLS targets from request body
@@ -91,7 +97,7 @@ func (c *CBOMController) HandleTargetDetail(w http.ResponseWriter, r *http.Reque
 			}
 			detail, err := c.service.ExecuteScanByTargetWithTLS(targetID, scanReq.TLSTargets)
 			if err != nil {
-				http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+				writeJSONError(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			json.NewEncoder(w).Encode(detail)
@@ -101,7 +107,7 @@ func (c *CBOMController) HandleTargetDetail(w http.ResponseWriter, r *http.Reque
 
 	target, err := c.service.GetTarget(targetID)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+		writeJSONError(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	json.NewEncoder(w).Encode(target)
@@ -115,7 +121,7 @@ func (c *CBOMController) HandleScans(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		scans, err := c.service.ListScans()
 		if err != nil {
-			http.Error(w, `{"error":"Failed to retrieve scans"}`, http.StatusInternalServerError)
+			writeJSONError(w, "Failed to retrieve scans", http.StatusInternalServerError)
 			return
 		}
 		json.NewEncoder(w).Encode(scans)
@@ -136,14 +142,14 @@ func (c *CBOMController) HandleScans(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err != nil {
-			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+			writeJSONError(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(detail)
 
 	default:
-		http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -154,7 +160,7 @@ func (c *CBOMController) HandleScanDetail(w http.ResponseWriter, r *http.Request
 	path := strings.TrimPrefix(r.URL.Path, "/api/v1/scans/")
 	parts := strings.Split(path, "/")
 	if len(parts) == 0 || parts[0] == "" {
-		http.Error(w, `{"error":"Scan ID required"}`, http.StatusBadRequest)
+		writeJSONError(w, "Scan ID required", http.StatusBadRequest)
 		return
 	}
 
@@ -166,7 +172,7 @@ func (c *CBOMController) HandleScanDetail(w http.ResponseWriter, r *http.Request
 		if format == "xml" {
 			xmlStr, err := c.service.GenerateCycloneDXXML(scanID)
 			if err != nil {
-				http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+				writeJSONError(w, err.Error(), http.StatusNotFound)
 				return
 			}
 			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
@@ -177,7 +183,7 @@ func (c *CBOMController) HandleScanDetail(w http.ResponseWriter, r *http.Request
 
 		bom, err := c.service.GenerateCycloneDX(scanID)
 		if err != nil {
-			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+			writeJSONError(w, err.Error(), http.StatusNotFound)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -190,7 +196,7 @@ func (c *CBOMController) HandleScanDetail(w http.ResponseWriter, r *http.Request
 	if len(parts) > 1 && parts[1] == "migration" {
 		plan, err := c.service.GetMigrationPlan(scanID)
 		if err != nil {
-			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+			writeJSONError(w, err.Error(), http.StatusNotFound)
 			return
 		}
 		json.NewEncoder(w).Encode(plan)
@@ -200,7 +206,7 @@ func (c *CBOMController) HandleScanDetail(w http.ResponseWriter, r *http.Request
 	// Default GET /api/v1/scans/{id}
 	detail, err := c.service.GetScanDetail(scanID)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusNotFound)
+		writeJSONError(w, err.Error(), http.StatusNotFound)
 		return
 	}
 	json.NewEncoder(w).Encode(detail)
