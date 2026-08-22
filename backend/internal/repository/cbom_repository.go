@@ -2,11 +2,106 @@ package repository
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
 	"github.com/quantumpq/qv-cbom/internal/models"
 )
+
+// SessionStore manages per-client isolated MemoryRepository instances.
+// Each client browser session gets its own isolated memory bucket preventing
+// data collision when multiple users scan simultaneously.
+type SessionStore struct {
+	mu       sync.RWMutex
+	sessions map[string]*sessionEntry
+}
+
+type sessionEntry struct {
+	repo      *MemoryRepository
+	lastUsed  time.Time
+}
+
+func NewSessionStore() *SessionStore {
+	return &SessionStore{
+		sessions: make(map[string]*sessionEntry),
+	}
+}
+
+// GetOrCreate returns the MemoryRepository for the given session ID,
+// creating a new isolated one if it doesn't exist yet.
+func (ss *SessionStore) GetOrCreate(sessionID string) *MemoryRepository {
+	if sessionID == "" {
+		sessionID = "default"
+	}
+
+	// Fast path: read lock
+	ss.mu.RLock()
+	entry, exists := ss.sessions[sessionID]
+	ss.mu.RUnlock()
+
+	if exists {
+		ss.mu.Lock()
+		ss.sessions[sessionID].lastUsed = time.Now()
+		ss.mu.Unlock()
+		return entry.repo
+	}
+
+	// Slow path: create new session bucket
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
+	// Double-check after acquiring write lock
+	if entry, exists = ss.sessions[sessionID]; exists {
+		ss.sessions[sessionID].lastUsed = time.Now()
+		return entry.repo
+	}
+
+	newRepo := NewMemoryRepository()
+	ss.sessions[sessionID] = &sessionEntry{
+		repo:     newRepo,
+		lastUsed: time.Now(),
+	}
+	log.Printf("[Session] Created new session bucket: %s (total sessions: %d)", sessionID[:min(8, len(sessionID))], len(ss.sessions))
+	return newRepo
+}
+
+// StartCleanup runs a background goroutine that evicts sessions inactive
+// longer than the given TTL. Call this once at server startup.
+func (ss *SessionStore) StartCleanup(ttl time.Duration) {
+	ticker := time.NewTicker(ttl / 2)
+	go func() {
+		for range ticker.C {
+			ss.evictExpired(ttl)
+		}
+	}()
+}
+
+func (ss *SessionStore) evictExpired(ttl time.Duration) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
+	now := time.Now()
+	evicted := 0
+	for id, entry := range ss.sessions {
+		if now.Sub(entry.lastUsed) > ttl {
+			delete(ss.sessions, id)
+			evicted++
+		}
+	}
+	if evicted > 0 {
+		log.Printf("[Session] Evicted %d expired sessions (remaining: %d)", evicted, len(ss.sessions))
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+
 
 type CBOMRepository interface {
 	CreateTarget(t models.Target) error

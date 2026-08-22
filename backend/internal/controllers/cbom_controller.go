@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 
@@ -29,13 +30,99 @@ type ScanRequest struct {
 	TLSTargets      []string `json:"tls_targets,omitempty"`
 }
 
+// getSessionID extracts the client session ID from the X-Session-ID header.
+// Falls back to "default" for direct API calls without a session header.
+func getSessionID(r *http.Request) string {
+	id := strings.TrimSpace(r.Header.Get("X-Session-ID"))
+	if id == "" || len(id) > 128 {
+		return "default"
+	}
+	return id
+}
+
+// svc returns a session-scoped CBOMService for this request.
+func (c *CBOMController) svc(r *http.Request) *services.CBOMService {
+	return c.service.ForSession(getSessionID(r))
+}
+
+
+// HandleUploadScan handles POST /api/v1/scans/upload (multipart/form-data)
+func (c *CBOMController) HandleUploadScan(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != http.MethodPost {
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Limit multipart memory buffer to 128 MB (excess stored in temp files)
+	if err := r.ParseMultipartForm(128 << 20); err != nil {
+		writeJSONError(w, "Failed to parse uploaded form data: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	folderName := r.FormValue("folder_name")
+	if folderName == "" {
+		folderName = "uploaded_project"
+	}
+
+	tlsTargetsRaw := r.FormValue("tls_targets")
+	var tlsTargets []string
+	if tlsTargetsRaw != "" {
+		for _, t := range strings.Split(tlsTargetsRaw, ",") {
+			if trimmed := strings.TrimSpace(t); trimmed != "" {
+				tlsTargets = append(tlsTargets, trimmed)
+			}
+		}
+	}
+
+	var files []services.UploadedFile
+
+	// Extract files from multipart form
+	if r.MultipartForm != nil && r.MultipartForm.File != nil {
+		for _, headers := range r.MultipartForm.File {
+			for _, fh := range headers {
+				file, err := fh.Open()
+				if err != nil {
+					continue
+				}
+				content, err := io.ReadAll(file)
+				file.Close()
+				if err != nil {
+					continue
+				}
+
+				relPath := fh.Filename
+				files = append(files, services.UploadedFile{
+					RelativePath: relPath,
+					Content:      content,
+				})
+			}
+		}
+	}
+
+	if len(files) == 0 {
+		writeJSONError(w, "No valid files received in upload", http.StatusBadRequest)
+		return
+	}
+
+	detail, err := c.svc(r).ExecuteScanFromUploadedFiles(files, folderName, tlsTargets)
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(detail)
+}
+
 // HandleTargets handles GET /api/v1/targets and POST /api/v1/targets
 func (c *CBOMController) HandleTargets(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	switch r.Method {
 	case http.MethodGet:
-		targets, err := c.service.ListTargets()
+		targets, err := c.svc(r).ListTargets()
 		if err != nil {
 			writeJSONError(w, "Failed to retrieve targets", http.StatusInternalServerError)
 			return
@@ -48,7 +135,7 @@ func (c *CBOMController) HandleTargets(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, "Invalid request payload", http.StatusBadRequest)
 			return
 		}
-		created, err := c.service.CreateTarget(target)
+		created, err := c.svc(r).CreateTarget(target)
 		if err != nil {
 			writeJSONError(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -77,7 +164,7 @@ func (c *CBOMController) HandleTargetDetail(w http.ResponseWriter, r *http.Reque
 	if len(parts) > 1 {
 		switch parts[1] {
 		case "scans":
-			scans, err := c.service.GetScansByTarget(targetID)
+			scans, err := c.svc(r).GetScansByTarget(targetID)
 			if err != nil {
 				writeJSONError(w, err.Error(), http.StatusNotFound)
 				return
@@ -95,7 +182,7 @@ func (c *CBOMController) HandleTargetDetail(w http.ResponseWriter, r *http.Reque
 			if r.Body != nil {
 				_ = json.NewDecoder(r.Body).Decode(&scanReq)
 			}
-			detail, err := c.service.ExecuteScanByTargetWithTLS(targetID, scanReq.TLSTargets)
+			detail, err := c.svc(r).ExecuteScanByTargetWithTLS(targetID, scanReq.TLSTargets)
 			if err != nil {
 				writeJSONError(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -105,7 +192,7 @@ func (c *CBOMController) HandleTargetDetail(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	target, err := c.service.GetTarget(targetID)
+	target, err := c.svc(r).GetTarget(targetID)
 	if err != nil {
 		writeJSONError(w, err.Error(), http.StatusNotFound)
 		return
@@ -119,7 +206,7 @@ func (c *CBOMController) HandleScans(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		scans, err := c.service.ListScans()
+		scans, err := c.svc(r).ListScans()
 		if err != nil {
 			writeJSONError(w, "Failed to retrieve scans", http.StatusInternalServerError)
 			return
@@ -136,9 +223,9 @@ func (c *CBOMController) HandleScans(w http.ResponseWriter, r *http.Request) {
 		var err error
 
 		if req.TargetID != "" {
-			detail, err = c.service.ExecuteScanByTarget(req.TargetID)
+			detail, err = c.svc(r).ExecuteScanByTarget(req.TargetID)
 		} else {
-			detail, err = c.service.ExecuteScan(req.TargetDirectory)
+			detail, err = c.svc(r).ExecuteScan(req.TargetDirectory)
 		}
 
 		if err != nil {
@@ -170,7 +257,7 @@ func (c *CBOMController) HandleScanDetail(w http.ResponseWriter, r *http.Request
 	if len(parts) > 1 && parts[1] == "cyclonedx" {
 		format := r.URL.Query().Get("format")
 		if format == "xml" {
-			xmlStr, err := c.service.GenerateCycloneDXXML(scanID)
+		xmlStr, err := c.svc(r).GenerateCycloneDXXML(scanID)
 			if err != nil {
 				writeJSONError(w, err.Error(), http.StatusNotFound)
 				return
@@ -181,7 +268,7 @@ func (c *CBOMController) HandleScanDetail(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		bom, err := c.service.GenerateCycloneDX(scanID)
+		bom, err := c.svc(r).GenerateCycloneDX(scanID)
 		if err != nil {
 			writeJSONError(w, err.Error(), http.StatusNotFound)
 			return
@@ -194,7 +281,7 @@ func (c *CBOMController) HandleScanDetail(w http.ResponseWriter, r *http.Request
 
 	// Handle /api/v1/scans/{id}/migration
 	if len(parts) > 1 && parts[1] == "migration" {
-		plan, err := c.service.GetMigrationPlan(scanID)
+		plan, err := c.svc(r).GetMigrationPlan(scanID)
 		if err != nil {
 			writeJSONError(w, err.Error(), http.StatusNotFound)
 			return
@@ -204,7 +291,7 @@ func (c *CBOMController) HandleScanDetail(w http.ResponseWriter, r *http.Request
 	}
 
 	// Default GET /api/v1/scans/{id}
-	detail, err := c.service.GetScanDetail(scanID)
+	detail, err := c.svc(r).GetScanDetail(scanID)
 	if err != nil {
 		writeJSONError(w, err.Error(), http.StatusNotFound)
 		return

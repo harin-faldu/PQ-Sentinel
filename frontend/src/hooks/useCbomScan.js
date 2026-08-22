@@ -45,6 +45,37 @@ export function useCbomScan() {
     }
   };
 
+  // Modern Browser Folder Upload Scan
+  const startFolderUploadScan = async (files, folderName = 'Uploaded Project', tlsTargets = []) => {
+    try {
+      setScanning(true);
+      setError(null);
+
+      const formData = new FormData();
+      formData.append('folder_name', folderName);
+      if (tlsTargets && tlsTargets.length > 0) {
+        formData.append('tls_targets', tlsTargets.join(','));
+      }
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const relPath = file.webkitRelativePath || file.name;
+        formData.append('files', file, relPath);
+      }
+
+      const detail = await api.uploadFolderScan(formData);
+      setCurrentScan(detail);
+      await loadScansAndTargets();
+      return detail;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  // Direct Path Scan (Fallback)
   const startLocalScan = async (targetPath, name = 'Local Codebase', tlsTargets = []) => {
     try {
       setScanning(true);
@@ -82,6 +113,7 @@ export function useCbomScan() {
     scanning,
     error,
     selectScan,
+    startFolderUploadScan,
     startLocalScan,
     reload: loadScansAndTargets,
     setError,

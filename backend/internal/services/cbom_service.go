@@ -32,17 +32,114 @@ func sanitizePURLString(s string) string {
 const scoreHistoryFile = "score-history.json"
 
 type CBOMService struct {
-	repo       repository.CBOMRepository
-	scanner    *scanner.Scanner
-	riskEngine *risk.RiskEngine
+	repo         repository.CBOMRepository
+	sessionStore *repository.SessionStore
+	scanner      *scanner.Scanner
+	riskEngine   *risk.RiskEngine
 }
 
-func NewCBOMService(repo repository.CBOMRepository) *CBOMService {
+// NewCBOMService creates a root CBOMService backed by a SessionStore.
+// Use ForSession(id) to get a session-scoped service for each request.
+func NewCBOMService(store *repository.SessionStore) *CBOMService {
 	return &CBOMService{
-		repo:       repo,
-		scanner:    scanner.NewScanner(),
-		riskEngine: risk.NewRiskEngine(),
+		sessionStore: store,
+		repo:         store.GetOrCreate("default"),
+		scanner:      scanner.NewScanner(),
+		riskEngine:   risk.NewRiskEngine(),
 	}
+}
+
+// ForSession returns a lightweight session-scoped CBOMService sharing
+// the same scanner and risk engine but with an isolated memory repository.
+func (s *CBOMService) ForSession(sessionID string) *CBOMService {
+	return &CBOMService{
+		sessionStore: s.sessionStore,
+		repo:         s.sessionStore.GetOrCreate(sessionID),
+		scanner:      s.scanner,
+		riskEngine:   s.riskEngine,
+	}
+}
+
+type UploadedFile struct {
+	RelativePath string
+	Content      []byte
+}
+
+func (s *CBOMService) ExecuteScanFromUploadedFiles(files []UploadedFile, folderName string, tlsTargets []string) (*models.ScanDetail, error) {
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no files provided in upload")
+	}
+
+	if folderName == "" {
+		folderName = "uploaded_project"
+	}
+
+	// 1. Create ephemeral sandbox directory
+	tempDir, err := os.MkdirTemp("", "cbom-upload-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create sandbox directory: %w", err)
+	}
+	defer os.RemoveAll(tempDir) // Guarantee full cleanup upon completion
+
+	// 2. Write files preserving relative directory structure
+	for _, f := range files {
+		cleanRel := strings.TrimPrefix(filepath.Clean(strings.ReplaceAll(f.RelativePath, "\\", "/")), "/")
+		// Prevent path traversal attack
+		if strings.HasPrefix(cleanRel, "..") {
+			continue
+		}
+
+		targetPath := filepath.Join(tempDir, cleanRel)
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			continue
+		}
+
+		_ = os.WriteFile(targetPath, f.Content, 0644)
+	}
+
+	// 3. Create active target for this uploaded folder
+	target := models.Target{
+		Name:      folderName,
+		Type:      models.TargetTypeRepo,
+		Location:  folderName,
+		CreatedAt: time.Now(),
+	}
+	createdTarget, err := s.CreateTarget(target)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create target: %w", err)
+	}
+
+	// 4. Scan the sandbox directory
+	scanID := fmt.Sprintf("scan-%d", time.Now().Unix())
+	startTime := time.Now()
+
+	assets, totalFiles, scannedFiles, err := s.scanner.ScanDirectory(tempDir, scanID)
+	if err != nil {
+		return nil, fmt.Errorf("scan execution failed: %w", err)
+	}
+
+	// Clean up asset locations to display user-friendly relative paths
+	for i := range assets {
+		cleanLoc := strings.ReplaceAll(assets[i].Location, "\\", "/")
+		cleanTemp := strings.ReplaceAll(tempDir, "\\", "/")
+		if strings.HasPrefix(cleanLoc, cleanTemp) {
+			rel := strings.TrimPrefix(cleanLoc, cleanTemp)
+			assets[i].Location = strings.TrimPrefix(rel, "/")
+		}
+	}
+
+	// 5. Optional TLS scan
+	if len(tlsTargets) > 0 {
+		var activeTargets []string
+		for _, t := range tlsTargets {
+			discovered := s.scanner.AutoDiscoverTLSEndpoints(t)
+			activeTargets = append(activeTargets, discovered...)
+		}
+		tlsAssets := s.scanner.ScanTLSEndpoints(activeTargets, scanID)
+		assets = append(assets, tlsAssets...)
+	}
+
+	return s.saveScanResults(createdTarget, scanID, assets, totalFiles, scannedFiles, startTime)
 }
 
 func (s *CBOMService) CreateTarget(target models.Target) (*models.Target, error) {

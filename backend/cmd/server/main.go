@@ -4,6 +4,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/quantumpq/qv-cbom/internal/controllers"
 	"github.com/quantumpq/qv-cbom/internal/middleware"
@@ -17,9 +18,10 @@ func main() {
 
 	log.Printf("Starting QuantumVault CBOM Engine on port %s (Zero-DB / In-Memory Mode)...", cfg.Port)
 
-	// In-Memory Repository (Ephemeral single-scan storage, no database required)
-	repo := repository.NewMemoryRepository()
-	cbomService := services.NewCBOMService(repo)
+	// Per-client Session Store (ephemeral, isolated memory buckets per browser session)
+	sessionStore := repository.NewSessionStore()
+	sessionStore.StartCleanup(2 * time.Hour) // Auto-evict inactive sessions after 2h
+	cbomService := services.NewCBOMService(sessionStore)
 	cbomController := controllers.NewCBOMController(cbomService)
 
 	mux := http.NewServeMux()
@@ -28,6 +30,7 @@ func main() {
 	mux.HandleFunc("/api/v1/health", cbomController.HandleHealth)
 	mux.HandleFunc("/api/v1/targets", cbomController.HandleTargets)
 	mux.HandleFunc("/api/v1/targets/", cbomController.HandleTargetDetail)
+	mux.HandleFunc("/api/v1/scans/upload", cbomController.HandleUploadScan)
 	mux.HandleFunc("/api/v1/scans", cbomController.HandleScans)
 	mux.HandleFunc("/api/v1/scans/", cbomController.HandleScanDetail)
 

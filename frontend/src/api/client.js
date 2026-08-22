@@ -1,10 +1,28 @@
 const API_BASE = '/api/v1';
 
+/**
+ * Returns a stable per-browser-session UUID.
+ * Persists across page refreshes via localStorage.
+ * Each browser tab that was opened fresh gets the same session as long as
+ * localStorage is shared (same origin, same tab or duplicated tab).
+ */
+function getOrCreateSessionId() {
+  let id = localStorage.getItem('cbom_session_id');
+  if (!id) {
+    id = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('cbom_session_id', id);
+  }
+  return id;
+}
+
 export async function fetchApi(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
   const defaultHeaders = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+    'X-Session-ID': getOrCreateSessionId(),
   };
 
   const config = {
@@ -50,6 +68,23 @@ export const api = {
     body: JSON.stringify(targetData),
   }),
   getTargetScans: (targetId) => fetchApi(`/targets/${targetId}/scans`),
+
+  // Upload Folder Ingestion & Scan
+  uploadFolderScan: async (formData) => {
+    const response = await fetch(`${API_BASE}/scans/upload`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Accept': 'application/json',
+        'X-Session-ID': getOrCreateSessionId(),
+      },
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Upload scan failed: HTTP ${response.status}`);
+    }
+    return await response.json();
+  },
 
   // Migration Plan & CycloneDX Export
   getMigrationPlan: (scanId) => fetchApi(`/scans/${scanId}/migration`),

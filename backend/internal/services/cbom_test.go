@@ -10,8 +10,9 @@ import (
 )
 
 func TestCycloneDXSpecCompliance(t *testing.T) {
-	repo := repository.NewMemoryRepository()
-	service := NewCBOMService(repo)
+	sessionStore := repository.NewSessionStore()
+	repo := sessionStore.GetOrCreate("default")
+	service := NewCBOMService(sessionStore)
 
 	// Seed test scan with crypto assets of different algorithms
 	scanID := "test-cyclonedx-scan"
@@ -116,8 +117,8 @@ func TestCycloneDXSpecCompliance(t *testing.T) {
 }
 
 func TestTargetEntityManagement(t *testing.T) {
-	repo := repository.NewMemoryRepository()
-	service := NewCBOMService(repo)
+	sessionStore := repository.NewSessionStore()
+	service := NewCBOMService(sessionStore)
 
 	// 1. Create Target
 	target := models.Target{

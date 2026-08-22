@@ -13,12 +13,9 @@ services:
       - PORT=8080
       - ALLOW_ORIGINS=*
     volumes:
-      # Mount sample testbed codebase for in-container scanning
+      # Mount sample testbed codebase for in-container fallback/tests
       - ./sample_target:/app/sample_target:ro
       - ./sample_target:/sample_target:ro
-      # Dynamic Host Drive Mounts: Allows scanning ANY folder on PC (C:\...) inside Docker
-      - C:\:/host_c:ro
-      - C:\Users:/Users:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/api/v1/health || exit 1"]

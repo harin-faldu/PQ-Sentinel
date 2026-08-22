@@ -32,8 +32,8 @@ func main() {
 		fmt.Printf("🌐 Active TLS Multi-Port Probing enabled for %d targets: %v\n", len(tlsTargets), tlsTargets)
 	}
 
-	repo := repository.NewMemoryRepository()
-	cbomService := services.NewCBOMService(repo)
+	sessionStore := repository.NewSessionStore()
+	cbomService := services.NewCBOMService(sessionStore)
 
 	// Load previous score history for trend display
 	previousHistory := cbomService.GetScoreHistory()

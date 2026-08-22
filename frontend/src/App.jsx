@@ -62,6 +62,7 @@ const CbomLayout = () => {
     scanning,
     error,
     selectScan,
+    startFolderUploadScan,
     startLocalScan,
     setError,
   } = useCbomScan();
@@ -138,6 +139,7 @@ const CbomLayout = () => {
       <IngestionModal
         isOpen={isIngestionOpen}
         onClose={() => setIsIngestionOpen(false)}
+        onStartUpload={startFolderUploadScan}
         onStartLocal={startLocalScan}
         scanning={scanning}
       />
