@@ -182,22 +182,67 @@ func (s *Scanner) ScanDirectory(targetDir string, scanID string) ([]models.Crypt
 
 		if info.IsDir() {
 			name := strings.ToLower(info.Name())
-			if name == ".git" || name == "node_modules" || name == "vendor" ||
-				name == "bin" || name == "dist" || name == "build" ||
-				name == "packages" || name == "obj" ||
-				name == "__pycache__" || name == "venv" || name == ".venv" ||
-				name == ".pytest_cache" {
+			switch name {
+			// === VCS ===
+			case ".git", ".svn", ".hg":
+				return filepath.SkipDir
+
+			// === JavaScript / TypeScript / Node.js ===
+			case "node_modules", ".next", ".nuxt", ".turbo", ".parcel-cache", "bower_components":
+				return filepath.SkipDir
+
+			// === Go ===
+			case "vendor": // Go modules vendor
+				return filepath.SkipDir
+
+			// === Java / Kotlin / Scala / Android ===
+			case ".gradle", ".m2", ".mvn", ".idea":
+				return filepath.SkipDir
+			case "target": // Maven/Gradle build output
+				return filepath.SkipDir
+
+			// === .NET / C# ===
+			case "packages", "obj":
+				return filepath.SkipDir
+
+			// === Python ===
+			case "__pycache__", "venv", ".venv", ".tox", ".mypy_cache",
+				".pytest_cache", ".eggs", "*.egg-info":
+				return filepath.SkipDir
+
+			// === Rust ===
+			case ".cargo":
+				return filepath.SkipDir
+
+			// === Ruby ===
+			case ".bundle":
+				return filepath.SkipDir
+
+			// === PHP ===
+			// "vendor" already handled above
+
+			// === Generic build / dist / output ===
+			case "bin", "dist", "build", "out", "output", "release", "debug",
+				"artifacts", ".cache", "tmp", "temp", "logs",
+				"coverage", ".nyc_output", "htmlcov":
+				return filepath.SkipDir
+
+			// === IDE / Editor ===
+			case ".vs", ".vscode", ".settings", ".classpath", ".project":
+				return filepath.SkipDir
+
+			// === Docker / Terraform state ===
+			case ".terraform":
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		totalFiles++
-
 		ext := strings.ToLower(filepath.Ext(path))
 
 		// Certificate file handling (multi-PEM via cert_parser)
 		if ext == ".crt" || ext == ".pem" || ext == ".cer" {
+			totalFiles++
 			scannedFiles++
 			certAssets := s.certParser.ParseCertFile(path, targetDir, scanID)
 			for i := range certAssets {
@@ -209,6 +254,7 @@ func (s *Scanner) ScanDirectory(targetDir string, scanID string) ([]models.Crypt
 
 		// PKCS#12 / PFX handling
 		if ext == ".p12" || ext == ".pfx" {
+			totalFiles++
 			scannedFiles++
 			p12Assets := s.certParser.ParsePKCS12File(path, targetDir, scanID)
 			for i := range p12Assets {
@@ -220,6 +266,7 @@ func (s *Scanner) ScanDirectory(targetDir string, scanID string) ([]models.Crypt
 
 		// JKS Java Keystore handling
 		if ext == ".jks" {
+			totalFiles++
 			scannedFiles++
 			jksAssets := s.certParser.ParseJKSFile(path, targetDir, scanID)
 			for i := range jksAssets {
@@ -230,6 +277,7 @@ func (s *Scanner) ScanDirectory(targetDir string, scanID string) ([]models.Crypt
 		}
 
 		if isScannableExtension(ext, info.Name()) {
+			totalFiles++
 			scannedFiles++
 
 			// Structured config file parsing (YAML/JSON/TOML)

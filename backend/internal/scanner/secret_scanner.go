@@ -127,14 +127,49 @@ func (ss *SecretScanner) ScanSecrets(targetDir string) ([]models.CryptoAsset, er
 			return nil
 		}
 
-		// Ignore .git VCS directory, packages, virtualenvs, pycache, node_modules, build/bin/obj outputs
+		// Ignore framework dependency, build output, cache, and IDE directories
+		// Use path separator awareness to avoid false positives (e.g. "rebuild" matching "build")
 		lowerPath := strings.ToLower(path)
-		if strings.Contains(lowerPath, ".git") || strings.Contains(lowerPath, "node_modules") ||
-			strings.Contains(lowerPath, "packages") || strings.Contains(lowerPath, "vendor") ||
-			strings.Contains(lowerPath, "dist") || strings.Contains(lowerPath, "build") ||
-			strings.Contains(lowerPath, "bin") || strings.Contains(lowerPath, "obj") ||
-			strings.Contains(lowerPath, "__pycache__") || strings.Contains(lowerPath, ".venv") ||
-			strings.Contains(lowerPath, "venv") || strings.Contains(lowerPath, ".pytest_cache") {
+		sep := string(filepath.Separator)
+		ignoreDirs := []string{
+			// VCS
+			".git" + sep, ".svn" + sep, ".hg" + sep,
+			// JS/TS/Node
+			"node_modules" + sep, ".next" + sep, ".nuxt" + sep, ".turbo" + sep,
+			".parcel-cache" + sep, "bower_components" + sep,
+			// Go
+			"vendor" + sep,
+			// Java/Kotlin/Scala/Android
+			".gradle" + sep, ".m2" + sep, ".mvn" + sep, ".idea" + sep,
+			sep + "target" + sep,
+			// .NET/C#
+			"packages" + sep, sep + "obj" + sep,
+			// Python
+			"__pycache__" + sep, "venv" + sep, ".venv" + sep, ".tox" + sep,
+			".mypy_cache" + sep, ".pytest_cache" + sep, ".eggs" + sep,
+			// Rust
+			".cargo" + sep,
+			// Ruby
+			".bundle" + sep,
+			// Generic build/dist/output
+			sep + "bin" + sep, sep + "dist" + sep, sep + "build" + sep,
+			sep + "out" + sep, sep + "output" + sep, sep + "release" + sep,
+			sep + "debug" + sep, ".cache" + sep, sep + "tmp" + sep,
+			sep + "coverage" + sep, ".nyc_output" + sep, "htmlcov" + sep,
+			sep + "logs" + sep,
+			// IDE
+			".vs" + sep, ".vscode" + sep, ".settings" + sep,
+			// IaC state
+			".terraform" + sep,
+		}
+		skipFile := false
+		for _, dir := range ignoreDirs {
+			if strings.Contains(lowerPath, dir) {
+				skipFile = true
+				break
+			}
+		}
+		if skipFile {
 			return nil
 		}
 
