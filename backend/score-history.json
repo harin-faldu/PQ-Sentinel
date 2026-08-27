@@ -1,0 +1,12 @@
+[
+  {
+    "scan_id": "scan-1787731295",
+    "target": "sample_target",
+    "pqc_score": 19,
+    "critical": 33,
+    "high": 16,
+    "medium": 0,
+    "safe": 7,
+    "timestamp": "2026-08-26T13:31:35.8689323+05:30"
+  }
+]
