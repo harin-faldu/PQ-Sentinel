@@ -150,6 +150,36 @@ Direct local filesystem scan for local repositories, microservice projects, or s
 
 ---
 
+## 🛡️ Commercial Ingestion Security & Binary Malware Shield
+
+To protect the server from Denial of Service (DoS), memory exhaustion, executable malware injections, and path traversal attacks during file and folder uploads, the platform implements a **Multi-Layer Zero-Trust Ingestion Shield**:
+
+### 1. File Extension & Manifest Whitelisting
+- **Allowed Source Formats**: `.go`, `.js`, `.jsx`, `.ts`, `.tsx`, `.py`, `.java`, `.rs`, `.c`, `.cpp`, `.h`, `.cs`, `.rb`, `.php`, `.sol`, `.kt`, `.scala`, `.swift`, `.dart`, `.lua`.
+- **Allowed Manifests & Configs**: `.json`, `.yaml`, `.yml`, `.toml`, `.xml`, `.conf`, `.ini`, `Dockerfile`, `go.mod`, `package.json`, `pom.xml`, `Cargo.toml`.
+- **Allowed Cryptographic Keys & Keystores**: `.pem`, `.crt`, `.cer`, `.key`, `.csr`, `.der`, `.p12`, `.pfx`, `.jks`, `.pub`, `.kdbx`.
+- **Strictly Blocked Executables (Auto-Filtered)**: `.exe`, `.dll`, `.so`, `.dylib`, `.bin`, `.msi`, `.iso`, `.bat`, `.cmd`, `.ps1`, `.vbs`, `.scr`, `.jar`, `.war`, `.class`, `.pyc`.
+
+### 2. Magic Byte Binary Header Inspection
+- Directly inspects the first 4 bytes of all uploaded file streams to prevent stealth malware renaming (e.g. `malware.exe` renamed to `payload.go`):
+  - 🚫 **Windows PE (`MZ`)**: Automatically blocked and dropped.
+  - 🚫 **Linux ELF (`\x7fELF`)**: Automatically blocked and dropped.
+  - 🚫 **Mach-O / Java Bytecode (`\xca\xfe\xba\xbe`, `\xce\xfa\xed\xfe`)**: Automatically blocked and dropped.
+
+### 3. Payload Size & Memory Guardrails
+- **Max Total Project Upload Size**: `100 MB` (prevents memory exhaustion).
+- **Max Single File Size**: `10 MB` per individual source file.
+- **Max File Count Limit**: `5,000` files per project scan.
+
+### 4. Path Traversal & Directory Sanitization
+- Cleanses and strips all `../`, `..\`, and absolute root path sequences (`/`, `C:\`) via `sanitizeRelativePath()`, ensuring uploaded buffers cannot escape sandbox memory or overwrite system files.
+
+### 5. Frontend Pre-Check Validation (`securityValidator.js`)
+- Validates file trees in the browser before network upload initiates.
+- Displays instant security breakdown: `✓ 42 Source Files Accepted • 2 binaries blocked`.
+
+---
+
 ## ⚙️ Environment Configuration (`.env`)
 
 The Go backend features an automatic `.env` loader in `pkg/config/config.go` (zero configuration needed by default).
