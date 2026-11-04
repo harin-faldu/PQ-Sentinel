@@ -1,4 +1,4 @@
-# 🚀 QuantumVault CBOM — Quick Run Guide
+# 🚀 PQ-Sentinel — Quick Run Guide
 
 1. **Start Docker Desktop** on your computer.
 2. **Launch Platform**: Run `docker compose up --build` in the project root directory.

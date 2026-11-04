@@ -27,7 +27,7 @@ func main() {
 		tlsTargets = strings.Split(*tlsFlag, ",")
 	}
 
-	fmt.Printf("🔍 Running QuantumVault CBOM Scanner 2.0 (Perfect 10/10 Engine) on: %s\n", targetDir)
+	fmt.Printf("🔍 Running PQ-Sentinel Scanner on: %s\n", targetDir)
 	if len(tlsTargets) > 0 {
 		fmt.Printf("🌐 Active TLS Multi-Port Probing enabled for %d targets: %v\n", len(tlsTargets), tlsTargets)
 	}
@@ -62,7 +62,7 @@ func main() {
 	}
 
 	fmt.Println("\n=======================================================")
-	fmt.Printf("  QUANTUMVAULT CBOM SCAN REPORT (PERFECT 10/10 ENGINE)\n")
+	fmt.Printf("  PQ-SENTINEL SCAN REPORT\n")
 	fmt.Println("=======================================================")
 	fmt.Printf("  Target Directory: %s\n", detail.Summary.TargetDirectory)
 	fmt.Printf("  Total Files:      %d | Scanned Files: %d\n", detail.Summary.TotalFiles, detail.Summary.ScannedFiles)

@@ -11,14 +11,13 @@ import { PlaceholderPage } from './pages/PlaceholderPage';
 import { IngestionModal } from './components/IngestionModal';
 import { CycloneDXExportModal } from './components/CycloneDXExportModal';
 import { useCbomScan } from './hooks/useCbomScan';
-import { useTheme } from './context/ThemeContext';
 import { AlertCircle, Info } from 'lucide-react';
+import { BrandMark } from './components/BrandMark';
 import './assets/styles/App.css';
 
 /* ── Main Layout with Sidebar ── */
 const MainLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const { isDark } = useTheme();
 
   return (
     <div className="app">
@@ -33,11 +32,7 @@ const MainLayout = () => {
           <span></span>
         </button>
         <div className="mobile-logo-container">
-          <img
-            src={isDark ? "/3.svg" : "/4.svg"}
-            alt="QuantumVault"
-            className="mobile-logo"
-          />
+          <BrandMark compact />
         </div>
       </header>
 
@@ -125,7 +120,7 @@ const CbomLayout = () => {
       {loading && !currentScan ? (
         <div className="card" style={{ padding: '60px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
           <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: 'var(--color-primary)' }}>
-            Initializing CBOM Intelligence Engine...
+            Initializing PQ-Sentinel Engine...
           </div>
           <div style={{ fontSize: '13px' }}>
             Loading cryptographic asset inventories, risk scores, and PQC migration strategies.
@@ -162,7 +157,7 @@ export function App() {
           {/* Default redirect to CBOM Dashboard */}
           <Route index element={<Navigate to="/cbom" replace />} />
 
-          {/* QuantaVault placeholder pages */}
+          {/* PQ-Sentinel placeholder pages */}
           <Route path="dashboard" element={<PlaceholderPage title="Dashboard" />} />
           <Route path="pqc-keys" element={<PlaceholderPage title="PQC Keys" />} />
           <Route path="authentication-keys" element={<PlaceholderPage title="Authentication Keys" />} />
@@ -192,7 +187,7 @@ export function App() {
   );
 }
 
-/* ── CBOM Page Wrappers with QuantaVault PageHeader & Page Layout ── */
+/* ── CBOM page wrappers with PQ-Sentinel page header & layout ── */
 
 function CbomDashboardWrapper() {
   const { currentScan, headerActionsProps } = useOutletContext();
@@ -200,7 +195,7 @@ function CbomDashboardWrapper() {
   return (
     <div className="page">
       <PageHeader
-        title="CBOM Intelligence"
+        title="PQ-Sentinel Intelligence"
         subtitle="Cryptographic Inventory & Post-Quantum Cryptography (PQC) Risk Assessment"
         action={<CbomHeaderActions {...headerActionsProps} />}
       />

@@ -90,7 +90,7 @@ source_code_rules:
     risk_level: "CRITICAL"
     risk_rationale: "Hardcoded JWT secret detected. Anyone with source code access can forge valid auth tokens."
     pqc_status: "VULNERABLE"
-    pqc_replacement: "QuantumVault Managed Key or HSM Secret"
+    pqc_replacement: "Managed Key or HSM Secret"
 
   - id: "JS-CRYPTO-05"
     name: "WebCrypto API RSA/ECDSA"
@@ -249,7 +249,7 @@ source_code_rules:
     risk_level: "HIGH"
     risk_rationale: "Go crypto/rsa key generation is susceptible to Shor's algorithm."
     pqc_status: "VULNERABLE"
-    pqc_replacement: "circl/pqc/kyber or QuantumVault Go SDK"
+    pqc_replacement: "circl/pqc/kyber or ML-KEM-768"
 
   - id: "GO-CRYPTO-02"
     name: "Go ecdsa.GenerateKey"

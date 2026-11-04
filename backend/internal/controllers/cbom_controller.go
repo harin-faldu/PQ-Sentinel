@@ -410,7 +410,7 @@ func (c *CBOMController) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"status":  "healthy",
-		"service": "QuantumVault CBOM Engine",
+		"service": "PQ-Sentinel Engine",
 		"version": "2.0.0",
 	})
 }

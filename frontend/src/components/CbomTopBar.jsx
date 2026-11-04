@@ -19,7 +19,7 @@ export function CbomTopBar({ currentScan, scans, targets, onSelectScan, onOpenIn
           color: 'var(--color-text-primary)',
           lineHeight: 1.2,
         }}>
-          CBOM <span style={{ color: 'var(--color-primary)' }}>Intelligence</span>
+          PQ-Sentinel <span style={{ color: 'var(--color-primary)' }}>Intelligence</span>
         </h1>
         <p style={{
           color: 'var(--color-text-muted)',

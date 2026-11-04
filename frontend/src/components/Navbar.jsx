@@ -29,7 +29,7 @@ export function Navbar({ activeTab, setActiveTab, currentScan, scans, targets, o
           </div>
           <div>
             <div style={{ fontSize: '18px', fontWeight: '800', color: '#f8fafc', letterSpacing: '-0.5px' }}>
-              QuantumVault <span style={{ color: '#38bdf8' }}>CBOM 2.0</span>
+              PQ-Sentinel <span style={{ color: '#38bdf8' }}>CBOM</span>
             </div>
             <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '500' }}>
               Post-Quantum Cryptographic Intelligence Platform

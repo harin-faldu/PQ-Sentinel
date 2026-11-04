@@ -29,7 +29,7 @@ export function AssetTable({ assets = [] }) {
 
   return (
     <div>
-      {/* Search & Filter Controls (Outside Card, matching QuantaVault screenshot) */}
+      {/* Search & Filter Controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {/* Search Box */}
         <div style={{ position: 'relative', flex: '0 0 240px' }}>

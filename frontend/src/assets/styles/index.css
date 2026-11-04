@@ -1,6 +1,6 @@
 /* ===================================
    DESIGN TOKENS & GLOBAL STYLES - CBOM
-   Cloned from QuantaVault design system
+   PQ-Sentinel design system
    =================================== */
 
 :root {
@@ -218,7 +218,7 @@ a:hover {
   gap: var(--spacing-xl);
 }
 
-/* Metrics Grid & Cards (QuantaVault Dashboard Style) */
+/* Metrics Grid & Cards */
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -425,7 +425,7 @@ a:hover {
   word-break: break-all;
 }
 
-/* Table Design & Responsive Wrapper (QuantaVault Table-Card Style) */
+/* Table Design & Responsive Wrapper */
 .table-card {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);

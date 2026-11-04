@@ -26,7 +26,7 @@ export function MigrationPlannerPage({ currentScan }) {
     loadPlan();
   }, [currentScan]);
 
-  const handleSimulateQuantumVaultProvisioning = (stepNumber) => {
+  const handleSimulateProvisioning = (stepNumber) => {
     setProvisioningStep(stepNumber);
     setTimeout(() => {
       setCompletedSteps((prev) => ({ ...prev, [stepNumber]: true }));
@@ -52,7 +52,7 @@ export function MigrationPlannerPage({ currentScan }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              QUANTUMVAULT PQC REMEDIATION ENGINE
+              PQ-SENTINEL PQC REMEDIATION ENGINE
             </span>
             <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginTop: '6px' }}>
               Automated Post-Quantum Migration Plan
@@ -135,7 +135,7 @@ export function MigrationPlannerPage({ currentScan }) {
                   <Button
                     variant={isDone ? "secondary" : "primary"}
                     size="small"
-                    onClick={() => handleSimulateQuantumVaultProvisioning(step.step_number)}
+                    onClick={() => handleSimulateProvisioning(step.step_number)}
                     disabled={isRunning || isDone}
                   >
                     {isRunning ? (
@@ -144,7 +144,7 @@ export function MigrationPlannerPage({ currentScan }) {
                       </>
                     ) : isDone ? (
                       <>
-                        <CheckCircle2 size={14} color="var(--color-success)" /> Provisioned in QuantaVault
+                        <CheckCircle2 size={14} color="var(--color-success)" /> Provisioned in PQ-Sentinel
                       </>
                     ) : (
                       <>

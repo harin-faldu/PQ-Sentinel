@@ -202,7 +202,7 @@ func (ss *SecretScanner) ScanSecrets(targetDir string) ([]models.CryptoAsset, er
 				ContextSnippet: "Unencrypted key material stored on filesystem: " + info.Name(),
 				RiskLevel:      models.RiskCritical,
 				PQCStatus:      models.StatusVulnerable,
-				PQCReplacement: "Migrate to QuantumVault HSM / Key Vault",
+				PQCReplacement: "Migrate to HSM / Key Vault",
 				RiskRationale:  "Raw key file committed to project directory.",
 				DiscoveredAt:   time.Now(),
 			})
@@ -239,7 +239,7 @@ func (ss *SecretScanner) ScanSecrets(targetDir string) ([]models.CryptoAsset, er
 					ContextSnippet: "Redacted Match: " + redactedMatch,
 					RiskLevel:      models.RiskCritical,
 					PQCStatus:      models.StatusVulnerable,
-					PQCReplacement: "Rotate Secret & Store in QuantumVault KMS",
+					PQCReplacement: "Rotate Secret & Store in a managed KMS",
 					RiskRationale:  "Hardcoded credential exposed in source code / .env file (Gitleaks scan).",
 					DiscoveredAt:   time.Now(),
 				})
@@ -276,7 +276,7 @@ func (ss *SecretScanner) ScanSecrets(targetDir string) ([]models.CryptoAsset, er
 							ContextSnippet: "Redacted Secret Line: " + redactedLine,
 							RiskLevel:      models.RiskLevel(rule.RiskLevel),
 							PQCStatus:      models.StatusVulnerable,
-							PQCReplacement: "Rotate credential & use QuantumVault Secrets Manager",
+							PQCReplacement: "Rotate credential & use a secrets manager",
 							RiskRationale:  "Hardcoded secret detected matching pattern " + rule.Name,
 							DiscoveredAt:   time.Now(),
 						})

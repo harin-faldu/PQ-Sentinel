@@ -22,6 +22,7 @@ import {
     Scan,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { BrandMark } from './BrandMark';
 import '../assets/styles/Sidebar.css';
 
 const Sidebar = ({ isOpen, onClose }) => {
@@ -82,12 +83,8 @@ const Sidebar = ({ isOpen, onClose }) => {
             <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
                 {/* Logo */}
                 <div className="sidebar-header">
-                    <div className="logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <img
-                            src={isDark ? "/3.svg" : "/4.svg"}
-                            alt="QuantumVault"
-                            style={{ width: '180px', height: 'auto', objectFit: 'contain' }}
-                        />
+                    <div className="logo">
+                        <BrandMark />
                     </div>
                 </div>
 
@@ -195,8 +192,8 @@ const Sidebar = ({ isOpen, onClose }) => {
                         <div className="user-info">
                             <div className="user-avatar">C</div>
                             <div className="user-details">
-                                <div className="user-name">CBOM User</div>
-                                <div className="user-account">admin@cbom.local</div>
+                                <div className="user-name">PQ-Sentinel Analyst</div>
+                                <div className="user-account">admin@pq-sentinel.local</div>
                             </div>
                         </div>
                     </div>

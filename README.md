@@ -1,4 +1,4 @@
-# 🛡️ QuantumVault CBOM Scanner 2.0
+# 🛡️ PQ-Sentinel — Cryptographic Bill of Materials
 
 > **Enterprise-Grade Post-Quantum Cryptographic Bill of Materials (CBOM) & Risk Management Platform**  
 > *Built with Go 1.22+, React + Vite Web Dashboard, Tree-Sitter AST, Embedded Gitleaks v8, Active Network & TLS Endpoint Probing, Zero-DB / In-Memory Engine, and CycloneDX 1.6 Exporter (JSON & XML)*
@@ -33,13 +33,13 @@
 
 ## 🔍 Overview & Vision
 
-**QuantumVault CBOM Scanner 2.0** is an enterprise-grade Post-Quantum Cryptographic Bill of Materials (CBOM) platform. It provides automated cryptographic discovery across local source code ASTs, secrets, containers, X.509 certificates, Java/PKCS12 keystores, and live network endpoints.
+**PQ-Sentinel** is an enterprise-grade Post-Quantum Cryptographic Bill of Materials (CBOM) platform. It provides automated cryptographic discovery across local source code ASTs, secrets, containers, X.509 certificates, Java/PKCS12 keystores, and live network endpoints.
 
 It calculates a **NIST PQC Readiness Score (0-100)**, tracks **NSA CNSA 2.0 regulatory compliance deadlines**, aggregates call-site symbol dependencies, and exports standard **CycloneDX 1.6 CBOM** specifications in both **JSON** and **XML**.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           QUANTUMVAULT CBOM PLATFORM                            │
+│                              PQ-SENTINEL PLATFORM                               │
 │                                                                                 │
 │                          Local Codebase Directory Target                        │
 │                                      │                                          │
@@ -66,7 +66,7 @@ It calculates a **NIST PQC Readiness Score (0-100)**, tracks **NSA CNSA 2.0 regu
 
 ## ⚡ Zero-DB / Pure In-Memory Architecture
 
-QuantumVault CBOM runs in **Zero-DB Mode**:
+PQ-Sentinel runs in **Zero-DB Mode**:
 - 🚀 **Zero External Dependencies**: No MySQL, PostgreSQL, or SQLite setup required.
 - ⚡ **Instant Execution**: The server starts up in milliseconds and holds scan results in high-performance, thread-safe memory storage.
 - 🔄 **Ephemeral Scan Preview**: Scan any local repository -> preview the comprehensive findings live on the dashboard -> keep it in preview until the next scan -> export / download CycloneDX 1.6 JSON & XML directly.
@@ -79,9 +79,9 @@ QuantumVault CBOM runs in **Zero-DB Mode**:
 sequenceDiagram
     autonumber
     actor User
-    participant Dashboard as CBOM Dashboard (React)
+    participant Dashboard as PQ-Sentinel Dashboard (React)
     participant Modal as Ingestion Modal
-    participant Backend as CBOM Go Backend (In-Memory Engine)
+    participant Backend as PQ-Sentinel Engine (In-Memory)
 
     User->>Dashboard: Clicks "Scan Codebase"
     Dashboard->>Modal: Opens Ingestion Modal

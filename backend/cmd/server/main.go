@@ -16,7 +16,7 @@ import (
 func main() {
 	cfg := config.LoadConfig()
 
-	log.Printf("Starting QuantumVault CBOM Engine on port %s (Zero-DB / In-Memory Mode)...", cfg.Port)
+	log.Printf("Starting PQ-Sentinel Engine on port %s (Zero-DB / In-Memory Mode)...", cfg.Port)
 
 	// Per-client Session Store (ephemeral, isolated memory buckets per browser session)
 	sessionStore := repository.NewSessionStore()
@@ -48,7 +48,7 @@ func main() {
 		log.Fatalf("Server shutdown error: %v", err)
 	}
 
-	log.Printf("QuantumVault CBOM API Server running at http://localhost:%s", port)
+	log.Printf("PQ-Sentinel API Server running at http://localhost:%s", port)
 	if err := http.Serve(listener, handler); err != nil {
 		log.Fatalf("Server shutdown error: %v", err)
 	}

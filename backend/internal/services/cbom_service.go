@@ -432,12 +432,12 @@ func (s *CBOMService) GenerateCycloneDX(scanID string) (*models.CycloneDXCBOM, e
 	bom := &models.CycloneDXCBOM{
 		BOMFormat:    "CycloneDX",
 		SpecVersion:  "1.6",
-		SerialNumber: fmt.Sprintf("urn:uuid:qv-cbom-%s", scanID),
+		SerialNumber: fmt.Sprintf("urn:uuid:pq-sentinel-%s", scanID)
 		Version:      1,
 		Metadata: models.CycloneDXMetadata{
 			Timestamp: nowISO,
 			Tools: []models.CycloneDXTool{
-				{Vendor: "QuantumVault", Name: "QV-CBOM Scanner", Version: "2.0.0"},
+				{Vendor: "PQ-Sentinel", Name: "PQ-Sentinel Scanner", Version: "2.0.0"},
 			},
 			Component: models.CycloneDXComponent{
 				Type: "application",
